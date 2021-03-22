@@ -54,6 +54,7 @@ fn scan(line: &str, errors: &mut Vec<String>) -> Line {
     while let Some((i, val)) = iter.next() {
         let i = i + end_of_mnemonic;
 
+        
         match val {
             ';' => break, // ignore the rest of line if the comment marker (;) is found
             '%' => {
@@ -99,7 +100,8 @@ fn evaluate(info: &Line) -> u16 {
         Mnemonic::JUMP => {
             match info.order[0] {
                 Register::NUM => (0x1000, 1),
-                Register::V   => (0xB000, 1)}},
+                Register::V   => (0xB000, 1),
+                _ => panic!("unknown arguments")}},
         
         Mnemonic::CALL => (0x2000, 1),
         Mnemonic::SKIP_E => {
@@ -156,6 +158,7 @@ fn evaluate(info: &Line) -> u16 {
                 } else {
                     panic!("Your number is too big!");
                 }
+            }
         },
         2 => {
             if info.arguments[0] <= 0xF {
@@ -203,7 +206,7 @@ fn print_order(order: &Vec<Register>) {
 
 fn main() {
     let mut errors = vec![];
-    let code = include_str!("test.ch8");
+    let code = "load %VA, 6";
     let info = scan(code, &mut errors);
     println!("{:X}",evaluate(&info));
 
