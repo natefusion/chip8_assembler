@@ -27,7 +27,7 @@ fn scan(line: &str, errors: &mut Vec<String>) -> Line {
     // Mnemonics must be at the beginning of the line (ignoring whitespace)
     let end_of_mnemonic = match line.find(' ') {
         Some(num) => num,
-        None => panic!("Unkown mnemonic found '{}'", line),
+        None => line.len(),
     };
 
     let mnemonic = match &line[..end_of_mnemonic] {
@@ -94,101 +94,70 @@ fn scan(line: &str, errors: &mut Vec<String>) -> Line {
 }
 
 fn evaluate(info: &Line) -> u16 {
-    let (mut opcode, argsnumber) = match info.mnemonic {
-        Mnemonic::CLEAR  => (0x00E0, 0),
-        Mnemonic::RETURN => (0x00EE, 0),
+    let (mut shell, extra) = match info.mnemonic {
+        Mnemonic::CLEAR  => (0x00E0, 0x0),
+        Mnemonic::RETURN => (0x00EE, 0x0),
         Mnemonic::JUMP => {
             match info.order[0] {
-                Register::NUM => (0x1000, 1),
-                Register::V   => (0xB000, 1),
+                Register::NUM => (0x1000, 0x1),
+                Register::V   => (0xB000, 0x1),
                 _ => panic!("unknown arguments")}},
         
-        Mnemonic::CALL => (0x2000, 1),
+        Mnemonic::CALL => (0x2000, 0x1),
         Mnemonic::SKIP_E => {
             match (&info.order[0], &info.order[1]) {
-                (Register::V, Register::NUM) => (0x3000, 2),
-                (Register::V, Register::V)   => (0x5000, 2),
+                (Register::V, Register::NUM) => (0x3000, 0x82),
+                (Register::V, Register::V)   => (0x5000, 0x482),
                 _ => panic!("unkown arguments")}},
         
-        Mnemonic::SKIP_NE => (0x4000, 2),
+        Mnemonic::SKIP_NE => (0x4000, 0x82),
         Mnemonic::LOAD => {
             match (&info.order[0], &info.order[1]) {
-                (Register::V, Register::NUM) => (0x6000, 2),
-                (Register::V, Register::V)   => (0x8000, 2),
-                (Register::I, Register::NUM) => (0xA000, 1),
-                (Register::V, Register::D)   => (0xF007, 1),
-                (Register::D, Register::V)   => (0xF015, 1),
-                (Register::V, Register::S)   => (0xF018, 1),
-                (Register::I, Register::V)   => (0xF029, 1),
+                (Register::V, Register::NUM) => (0x6000, 0x82),
+                (Register::V, Register::V)   => (0x8000, 0x482),
+                (Register::I, Register::NUM) => (0xA000, 0x1),
+                (Register::V, Register::D)   => (0xF007, 0x81),
+                (Register::D, Register::V)   => (0xF015, 0x81),
+                (Register::V, Register::S)   => (0xF018, 0x81),
+                (Register::I, Register::V)   => (0xF029, 0x81),
                 _ => panic!("unkown arguments")}},
         
         Mnemonic::ADD => {
             match (&info.order[0], &info.order[1]) {
-                (Register::V, Register::NUM) => (0x7000, 2),
-                (Register::V, Register::V)   => (0x8004, 2),
-                (Register::I, Register::V)   => (0xF01E, 1),
+                (Register::V, Register::NUM) => (0x7000, 0x82),
+                (Register::V, Register::V)   => (0x8004, 0x482),
+                (Register::I, Register::V)   => (0xF01E, 0x81),
                 _ => panic!("unkown arguments")}},
         
-        Mnemonic::OR        => (0x8001, 2),  Mnemonic::AND    => (0x8002, 2),
-        Mnemonic::XOR       => (0x8003, 2),  Mnemonic::SUB    => (0x8005, 2),
-        Mnemonic::SHIFT_R   => (0x8006, 2),  Mnemonic::SUB_N  => (0x8007, 2),
-        Mnemonic::SHIFT_L   => (0x800E, 2),  Mnemonic::RAND   => (0xC000, 2),
-        Mnemonic::DRAW      => (0xD000, 3),  Mnemonic::SKIP_P => (0xE09E, 1),
-        Mnemonic::SKIP_NP   => (0xE0A1, 1),  Mnemonic::WAIT   => (0xF00A, 1),
-        Mnemonic::STORE_BCD => (0xF033, 1),  Mnemonic::STORE  => (0xF055, 1),
-        Mnemonic::READ      => (0xF065, 1),
+        Mnemonic::OR        => (0x8001, 0x482),   Mnemonic::AND    => (0x8002, 0x482),
+        Mnemonic::XOR       => (0x8003, 0x482),   Mnemonic::SUB    => (0x8005, 0x482),
+        Mnemonic::SHIFT_R   => (0x8006, 0x482),   Mnemonic::SUB_N  => (0x8007, 0x482),
+        Mnemonic::SHIFT_L   => (0x800E, 0x482),   Mnemonic::RAND   => (0xC000, 0x82),
+        Mnemonic::DRAW      => (0xD000, 0x483),   Mnemonic::SKIP_P => (0xE09E, 0x81),
+        Mnemonic::SKIP_NP   => (0xE0A1, 0x81),    Mnemonic::WAIT   => (0xF00A, 0x81),
+        Mnemonic::STORE_BCD => (0xF033, 0x81),    Mnemonic::STORE  => (0xF055, 0x81),
+        Mnemonic::READ      => (0xF065, 0x81),
     };
 
-    if info.arguments.len() != argsnumber {
+    if info.arguments.len() != extra & 0xF {
         panic!("Incorrect amount of arguments");
     }
 
-    // this sure better get rewritten
-    match argsnumber {
-        1 => {
-            if opcode & 0xFF == 0 {
-                if info.arguments[0] <= 0xFFF {
-                    opcode |= info.arguments[0];
-                } else {
-                    panic!("Your number is too big!");
-                }
-            } else {
-                if info.arguments[0] <= 0xF {
-                    opcode |= info.arguments[0] << 8;
-                } else {
-                    panic!("Your number is too big!");
-                }
-            }
-        },
-        2 => {
-            if info.arguments[0] <= 0xF {
-                opcode |= info.arguments[0] << 8;
-            } else {
-                panic!("Your number is too big!");
-            }
+    for (i, val) in info.arguments.iter().enumerate() {
+        let shift = (extra >> (4 + (i<<2))) & 0xF;
+        let max = match shift {
+            8 | 4 => 0xF,
+            _ => 0xFFFF >> ((extra & 0xF) * 4)
+        };
 
-            if info.arguments[1] <= 0xFF {
-                if opcode & 0xFF == 0 {
-                    opcode |= info.arguments[1];
-                } else {
-                    opcode |= info.arguments[1] << 4;
-                }
-            } else {
-                panic!("Your number is too big!");
-            }
-        },
-        3 => {
-            for (i, val) in info.arguments.iter().enumerate() {
-                if *val > 0xF {
-                    panic!("Your number is too big!");
-                }
-                opcode |= val << (8 - (i * 4));
-            }
+        if *val > max {
+            panic!("num too big!");
         }
-        _ => panic!("This will never happen (I think)"),
+        
+        shell |= val << shift;
     }
 
-    opcode
+    shell
 }
 
 fn print_order(order: &Vec<Register>) {
@@ -206,7 +175,7 @@ fn print_order(order: &Vec<Register>) {
 
 fn main() {
     let mut errors = vec![];
-    let code = "load %VA, 6";
+    let code = "load %VA, FF";
     let info = scan(code, &mut errors);
     println!("{:X}",evaluate(&info));
 
@@ -214,9 +183,9 @@ fn main() {
     print_order(&info.order);
 
     if errors.len() != 0 {
-        println!("ERROR(S):");
+        eprintln!("ERROR(S):");
         for i in errors.iter() {
-            println!("{}",i);
+            eprintln!("{}",i);
         }
         std::process::exit(1);
     }
