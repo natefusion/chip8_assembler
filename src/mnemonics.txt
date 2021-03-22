@@ -1,0 +1,77 @@
+## Nathan's chip8 assembly language ##
+
+% -- refers to an internal register
+$ -- refers to a hexadecimal number, nothing is a decimal
+
+%vx, %vy -- the 'x' or 'y' is implied hexidecimal
+
+Unique mnemonics:
+       clear
+       return
+       jump
+       call
+       skip_e
+       skip_ne
+       load
+       add
+       or
+       and
+       xor
+       sub
+       shift_r
+       sub_n
+       shift_l
+       rand
+       draw
+       skip_p
+       skip_np
+       wait
+       store_bcd
+       store
+       read
+
+Registers list:
+	  %V[0-F] -- V registers
+	  %I      -- I register
+	  %D      -- delay timer
+	  %S      -- Sound timer
+
+MNEMONIC, VARIABLES, OPCODE, EXPLANATION
+clear               -- 00E0 (clear screen) 
+return              -- 00EE (return)
+jump      nnn       -- 1NNN (jump)
+call      nnn       -- 2NNN (Call subroutine at nnn)
+skip_e    %Vx,kk    -- 3XKK (skip instruction if equal)
+skip_ne   %Vx,kk    -- 4XKK (skip instruction if not equal with v registers only)
+skip_e    %Vx,%Vy   -- 5XY0 (skip instruction if equal with v registers only)
+load      %Vx,kk    -- 6XKK (load (into v register))
+add       %Vx,kk    -- 7XKK (add)
+	      
+load      %Vx,%Vy   -- 8XY0 (load with v registers only)
+or        %Vx,%Vy   -- 8XY1 (or)
+and       %Vx,%Vy   -- 8XY2 (and)
+xor       %Vx,%Vy   -- 8XY3 (xor)
+add       %Vx,%Vy   -- 8XY4 (add with v registers only)
+sub       %Vx,%Vy   -- 8XY5 (subtract)
+shift_r   %Vx,%Vy   -- 8XY6 (shift right)
+sub_n     %Vx,%Vy   -- 8XY7 (subtract and set not borrow)
+shift_l   %Vx,%Vy   -- 8XYE (shift left)
+
+skip_ne   %Vx,%Vy   -- 9XY0 (skip if not equal v registers only)
+load      %I,nnn    -- ANNN (load (to) i)
+jump      %V0,nnn   -- BNNN (jump with register v0 + $nnn)
+rand      %Vx,kk    -- CXKK (random number)
+draw      %Vx,%Vy,n -- DXYN (draw)
+
+skip_p    %Vx       -- EX9E (skip instruction if key is pressed)
+skip_np   %Vx       -- EXA1 (skip instruction if key is not pressed)
+
+load      %Vx,%D    -- FX07 (load delay timer to register v)
+wait      %Vx       -- FX0A (waits for a key press and stores the key press in v)
+load      %D,%Vx    -- FX15 (load register v to delay timer)
+load      %Vx,%S    -- FX18 (load sound timer to register v)
+add       %I,%Vx    -- FX1E (add (to i register))
+load      %I,%Vx    -- FX29 (load sprite into i register (from register v))
+store_bcd %Vx       -- FX33 (store bcd representation of v (in memory))
+store     %Vx       -- FX55 (store (v(0-x) in memory))
+read      %Vx       -- FX65 (read (memory to v(0-x)))

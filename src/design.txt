@@ -1,0 +1,33 @@
+## Chip8 assembler general desgin ##
+
+main:
+        input = file::read()
+        output = file::new()
+
+        // Holds information about annotations
+        struct Annotation:
+               pc,
+               annotation,
+
+        annotation_array;
+
+        pc = 0
+        for line in input:
+            let has_mnemonic = has_mnemonic(line)
+            
+            if has_mnemonic == true:
+               args = process_args(line)
+            
+                // returns [arg0_mod, arg1_mod, arg2_mod, mnemonic_template]
+                // arg#_mod will be the value to for how many times to bit shift the args to get proper values
+                template = get_mnemonic_template(line)
+
+                // Returns a properly formatted opcode to be written to a file
+                let opcode = assemble(template, args)
+
+                output.write(opcode)
+                pc += 1
+                
+            else:
+                annotation = get_annotation(line)
+                annotation_array.push(Annotation { pc,annotation, })
