@@ -132,29 +132,28 @@ fn eval(info: &Line, errors: &mut Vec<String>) -> u16 {
         READ      => (0xF065, 0x81),
         UNKNOWN   => return 0,
     };
+    
     if let (0xF, 0xF) = (shell, extra) {
         errors.push(format!("unknown arguments"));
-        0
-    } else {
-        if info.arguments.len() != extra & 0xF {
-            errors.push(format!("{} arguments were supplied when {} arguments were requested",extra & 0xF, info.arguments.len()));
+        return 0
+    } else if info.arguments.len() != extra & 0xF {
+        errors.push(format!("{} arguments were supplied when {} arguments were requested",extra & 0xF, info.arguments.len()));
+        return 0;
+    }
+        
+    for (i, val) in info.arguments.iter().enumerate() {
+        let shift = (extra >> (4 + (i * 4))) & 0xF;
+        let max = if shift == 0 { 0xFFFF >> ((extra & 0xF) * 4) } else { 0xF };
+        
+        if *val > max {
+            errors.push(format!("0x{:X} was greater than the max value of 0x{:X} for the supplied argument", val, max));
             return 0;
         }
         
-        for (i, val) in info.arguments.iter().enumerate() {
-            let shift = (extra >> (4 + (i * 4))) & 0xF;
-            let max = if shift == 0 { 0xFFFF >> ((extra & 0xF) * 4) } else { 0xF };
-            
-            if *val > max {
-                errors.push(format!("0x{:X} was greater than the max value of 0x{:X} for the supplied argument", val, max));
-                return 0;
-            }
-            
-            shell |= val << shift;
-        }
-        
-        shell
+        shell |= val << shift;
     }
+    
+    shell
 }
 
 fn print_order(order: &Vec<Register>) {
