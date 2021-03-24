@@ -1,5 +1,6 @@
 #![allow(non_camel_case_types, non_snake_case)]
 use crate::{Register::*, Mnemonic::*};
+use std::{fs::File, io::{BufRead, BufReader}, env};
 
 #[derive(Copy,Clone)]
 enum Mnemonic {
@@ -90,7 +91,7 @@ fn scan(line: &str, errors: &mut Vec<String>) -> Line {
     }
 }
 
-fn evaluate(info: &Line, errors: &mut Vec<String>) -> u16 {
+fn eval(info: &Line, errors: &mut Vec<String>) -> u16 {
     let mut register = info.order.iter();
     let (mut shell, extra) = match info.mnemonic {
         JUMP => {
@@ -173,14 +174,26 @@ fn print_order(order: &Vec<Register>) {
 }
 
 fn main() {
-    let mut errors = vec![];
-    let code = "load %I, FFFF";
-    let info = scan(code, &mut errors);
-    let opcode = evaluate(&info, &mut errors);
-    println!("{:X}", opcode);
+    let file = {
+        match env::args().nth(1) {
+            Some(file) => {
+                match File::open(file) {
+                    Ok(file) => file,
+                    Err(_) => { eprintln!("Cannot read file"); std::process::exit(1); },
+                }
+            },
+            None => { eprintln!("Please enter a file"); std::process::exit(1); },
+        }
+    };
 
-    //println!("{:?}",info.arguments);
-    //print_order(&info.order);
+    let reader = BufReader::new(file).lines();
+    let mut errors = vec![];
+    
+    for line in reader.map(|l| l.unwrap()) {
+        let info = scan(&line, &mut errors);
+        let opcode = eval(&info, &mut errors);
+        println!("{:X}", opcode);
+    }
 
     if errors.len() != 0 {
         eprintln!("ERROR(S):");
