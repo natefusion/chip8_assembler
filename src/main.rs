@@ -135,7 +135,7 @@ fn eval(info: &Line, errors: &mut Vec<String>) -> u16 {
     
     if let (0xF, 0xF) = (shell, extra) {
         errors.push(format!("unknown arguments"));
-        return 0
+        return 0;
     } else if info.arguments.len() != extra & 0xF {
         errors.push(format!("{} arguments were supplied when {} arguments were requested",extra & 0xF, info.arguments.len()));
         return 0;
