@@ -84,11 +84,7 @@ fn scan(line: &str, errors: &mut Vec<String>) -> Line {
         }
     }
 
-    Line {
-        mnemonic: mnemonic,
-        arguments: arguments,
-        order: order,
-    }
+    Line { mnemonic, arguments, order }
 }
 
 fn eval(info: &Line, errors: &mut Vec<String>) -> u16 {
