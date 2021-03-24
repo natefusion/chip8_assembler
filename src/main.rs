@@ -158,34 +158,6 @@ fn evaluate(info: &Line, errors: &mut Vec<String>) -> u16 {
         
         shell
     }
-    /*
-    match (shell, extra) {
-        (0xF, 0xF) => { errors.push(format!("unknown arguments")); 0 },
-        _ => {
-            if info.arguments.len() != extra & 0xF {
-                errors.push(format!("{} arguments were supplied when {} arguments were requested",extra & 0xF, info.arguments.len()));
-                return 0;
-            }
-
-            for (i, val) in info.arguments.iter().enumerate() {
-                let shift = (extra >> (4 + (i<<2))) & 0xF;
-                let max = match shift {
-                    8 | 4 => 0xF,
-                    _ => 0xFFFF >> ((extra & 0xF) << 2)
-                };
-
-                if *val > max {
-                    errors.push(format!("0x{:X} was greater than the max value of 0x{:X} for the supplied argument", val, max));
-                    return 0;
-                }
-        
-                shell |= val << shift;
-            }
-
-            shell
-        }
-    }
-*/
 }
 
 fn print_order(order: &Vec<Register>) {
