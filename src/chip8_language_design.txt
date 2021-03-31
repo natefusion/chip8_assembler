@@ -1,0 +1,33 @@
+jump nnn
+jump0 nnn
+neq [vx] nn (else/begin end)
+neq [vx] [vy] (else/begin end)
+eq [vx] nn (else/begin end)
+eq [key] (else/begin end)
+neq [key] (else/begin end)
+set [vx] [key]
+set [vx] nn
+set [vx] [vy]
+set [i] nnn
+set [vx] [dt]
+set [dt] [vx]
+set [vx] [st]
+set [i] [vx]
+add [vx] nn
+add [vx] [vy]
+add [i] [vx]
+sub [vx] [vy]
+subr [vx] [vy]
+or [vx] [vy]
+xor [vx] [vy]
+shr [vx] [vy]
+shl [vx] [vy]
+and [vx] [vy]
+rand [vx] nn
+writebcd [vx]
+read [vx]
+write [vx]
+draw [vx] [vy] n
+clear
+begin (nnn)
+end
