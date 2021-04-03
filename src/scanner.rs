@@ -26,7 +26,7 @@ impl Scanner {
         }
     }
 
-    pub fn scan_file(&mut self, file: &mut BufReader<File>) {
+    pub fn scan_file<'a>(&mut self, file: &mut BufReader<File>) {
         for line in file.lines().map(|l| l.unwrap().trim().to_string()) {
             self.line = line;
             self.delim = 0;
@@ -55,65 +55,10 @@ impl Scanner {
      */
     fn scan_chunk(&mut self) {
         match self.peek(0) {
-            '%' => {
-                if self.peek(1) == 'v' {
-                    self.index += 2;
-                    self.push_register(V);
-                    self.push_argument(usize::from_str_radix(self.chunk(), 16).unwrap());
-                } else {
-                    self.push_register(
-                        match self.chunk() {
-                            "i"   => I,
-                            "dt"  => DT,
-                            "st"  => ST,
-                            "key" => KEY,
-                            _ => Register::UNKNOWN,
-                        }
-                    );
-                }
-            },
-
-            '0'..='9' => {
-                let radix = {
-                    if self.peek(1) == 'x' {
-                        self.index += 2;
-                        16 } else { 10 }
-                    };
-
-                self.push_argument(usize::from_str_radix(self.chunk(), radix).unwrap());
-            },
-
-            // The rest of a line is skipped if there is a comment
-            ';' => self.delim = self.line.len(),
-
-            _ => {
-                self.push_mnemonic(
-                    match self.chunk() {
-                        "clear"    => CLEAR,
-                        "end"      => END,
-                        "jump"     => JUMP,
-                        "jump0"    => JUMP0,
-                        "begin"    => BEGIN,
-                        "neq"      => NEQ,
-                        "eq"       => EQ,
-                        "set"      => SET,
-                        "add"      => ADD,
-                        "or"       => OR,
-                        "and"      => AND,
-                        "xor"      => XOR,
-                        "sub"      => SUB,
-                        "shr"      => SHR,
-                        "subr"     => SUBR,
-                        "shl"      => SHL,
-                        "rand"     => RAND,
-                        "draw"     => DRAW,
-                        "writebcd" => WRITEBCD,
-                        "write"    => WRITE,
-                        "read"     => READ,
-                        _ => Mnemonic::UNKNOWN,
-                    }
-                );
-            },
+            '%'        => self.scan_register(),
+            '0'..='9' => self.scan_number(),         
+            ';'         => self.delim = self.line.len(), // The rest of a line is skipped if there is a comment
+            _           => self.scan_mnemonic(),
         }
 
         // Moves index to the next chunk
@@ -122,21 +67,79 @@ impl Scanner {
             None => self.line.len(),
         };
     }
-
-    fn push_mnemonic(&mut self, mnemonic: Mnemonic) {
-        self.instructions.push((mnemonic, vec![], vec![]));
+    
+    fn scan_register(&mut self) {
+        let register = {
+            match self.chunk() {
+                _ if self.peek(1) == 'v' => {
+                    self.index += 2;
+                    let argument = usize::from_str_radix(self.chunk(), 16).unwrap();
+                    self.instructions.last_mut().unwrap().2.push(argument);
+                    V
+                },
+                "i"   => I,
+                "dt"  => DT,
+                "st"  => ST,
+                "key" => KEY,
+                _     => Register::UNKNOWN,
+            }
+        };
+        
+        self.instructions.last_mut().unwrap().1.push(register);
     }
+        
+    fn scan_number(&mut self) {
+        let radix = {
+            if self.peek(1) == 'x' {
+                self.index += 2;
+                16 
+            } else {
+                10 
+            }
+        };
 
-    fn push_register(&mut self, register: Register) {
-        let i = self.instructions.len()-1;
-        self.instructions[i].1.push(register);
+        let argument = usize::from_str_radix(self.chunk(), radix).unwrap();
+        self.instructions.last_mut().unwrap().2.push(argument);
     }
-
-    fn push_argument(&mut self, argument: usize) {
-        let i = self.instructions.len()-1;
-        self.instructions[i].2.push(argument);
+    
+    fn scan_mnemonic(&mut self) {
+        let mnemonic = (
+            match self.chunk() {
+                "clear"    => CLEAR,
+                "end"      => END,
+                "jump"     => JUMP,
+                "jump0"    => JUMP0,
+                "begin"    => BEGIN,
+                "neq"      => NEQ,
+                "eq"       => EQ,
+                "set"      => SET,
+                "add"      => ADD,
+                "or"       => OR,
+                "and"      => AND,
+                "xor"      => XOR,
+                "sub"      => SUB,
+                "shr"      => SHR,
+                "subr"     => SUBR,
+                "shl"      => SHL,
+                "rand"     => RAND,
+                "draw"     => DRAW,
+                "writebcd" => WRITEBCD,
+                "write"    => WRITE,
+                "read"     => READ,
+                _ => Mnemonic::UNKNOWN,
+            },
+            vec![],
+            vec![]
+        );
+        
+        self.instructions.push(mnemonic);
     }
-
-    fn chunk(&self) -> &str { &self.line[self.index..self.delim] }
-    fn peek(&self, i: usize) -> char { self.line.chars().nth(self.index+i).unwrap() }
+    
+    fn chunk(&self) -> &str {
+        &self.line[self.index..self.delim]
+    }
+    
+    fn peek(&self, i: usize) -> char {
+        self.line.chars().nth(self.index+i).unwrap()
+    }
 }
