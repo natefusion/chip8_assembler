@@ -13,6 +13,7 @@ pub struct Scanner {
     line: String,
     delim: usize,
     index: usize,
+    annotations: Vec<(String, usize)>,
     pub instructions: Vec<(Mnemonic, Vec<Register>, Vec<usize>)>,
 }
 
@@ -22,12 +23,13 @@ impl Scanner {
             line: String::new(),
             delim: 0,
             index: 0,
+            annotations: vec![],
             instructions: vec![],
         }
     }
 
-    pub fn scan_file<'a>(&mut self, file: &mut BufReader<File>) {
-        for line in file.lines().map(|l| l.unwrap().trim().to_string()) {
+    pub fn scan_file(&mut self, file: &mut BufReader<File>) {
+        for line in file.lines().map(|l| l.unwrap().trim().to_ascii_lowercase().to_string()) {
             self.line = line;
             self.delim = 0;
             self.index = 0;
@@ -54,11 +56,30 @@ impl Scanner {
      * Add the newly formed token to the list of instructions
      */
     fn scan_chunk(&mut self) {
-        match self.peek(0) {
-            '%'        => self.scan_register(),
-            '0'..='9' => self.scan_number(),         
-            ';'         => self.delim = self.line.len(), // The rest of a line is skipped if there is a comment
-            _           => self.scan_mnemonic(),
+        match self.peek(0).unwrap() {
+            '%'       => self.scan_register(),
+            '0'..='9' => self.scan_number(),
+            ';'       => self.delim = self.line.len(), // The rest of a line is skipped if there is a comment
+            _ => {
+                // Adds annotation to the list
+                if &self.line[self.delim-1..self.delim] == ":" {
+                    self.annotations.push(
+                        (self.line[self.index..self.delim-1].to_string(), 0x200 + self.instructions.len() * 2));
+                } else {
+                    // Determines whether the token is a mnemonic or an annotation
+                    match self.scan_mnemonic() {
+                        Mnemonic::UNKNOWN => {
+                            for annotation in self.annotations.iter() {
+                                if annotation.0 == self.chunk() {
+                                    self.instructions.last_mut().unwrap().2.push(annotation.1);
+                                    break;
+                                }
+                            }
+                        },
+                        x => self.instructions.push((x, vec![], vec![])),
+                    }
+                }
+            },
         }
 
         // Moves index to the next chunk
@@ -69,10 +90,11 @@ impl Scanner {
     }
     
     fn scan_register(&mut self) {
+        self.index += 1;
         let register = {
             match self.chunk() {
-                _ if self.peek(1) == 'v' => {
-                    self.index += 2;
+                _ if self.peek(0).unwrap() == 'v' => {
+                    self.index += 1;
                     let argument = usize::from_str_radix(self.chunk(), 16).unwrap();
                     self.instructions.last_mut().unwrap().2.push(argument);
                     V
@@ -90,7 +112,7 @@ impl Scanner {
         
     fn scan_number(&mut self) {
         let radix = {
-            if self.peek(1) == 'x' {
+            if let Some('x') = self.peek(1) {
                 self.index += 2;
                 16 
             } else {
@@ -102,44 +124,38 @@ impl Scanner {
         self.instructions.last_mut().unwrap().2.push(argument);
     }
     
-    fn scan_mnemonic(&mut self) {
-        let mnemonic = (
-            match self.chunk() {
-                "clear"    => CLEAR,
-                "end"      => END,
-                "jump"     => JUMP,
-                "jump0"    => JUMP0,
-                "begin"    => BEGIN,
-                "neq"      => NEQ,
-                "eq"       => EQ,
-                "set"      => SET,
-                "add"      => ADD,
-                "or"       => OR,
-                "and"      => AND,
-                "xor"      => XOR,
-                "sub"      => SUB,
-                "shr"      => SHR,
-                "subr"     => SUBR,
-                "shl"      => SHL,
-                "rand"     => RAND,
-                "draw"     => DRAW,
-                "writebcd" => WRITEBCD,
-                "write"    => WRITE,
-                "read"     => READ,
-                _ => Mnemonic::UNKNOWN,
-            },
-            vec![],
-            vec![]
-        );
-        
-        self.instructions.push(mnemonic);
+    fn scan_mnemonic(&mut self) -> Mnemonic {
+        match self.chunk() {
+            "clear"    => CLEAR,
+            "end"      => END,
+            "jump"     => JUMP,
+            "jump0"    => JUMP0,
+            "begin"    => BEGIN,
+            "neq"      => NEQ,
+            "eq"       => EQ,
+            "set"      => SET,
+            "add"      => ADD,
+            "or"       => OR,
+            "and"      => AND,
+            "xor"      => XOR,
+            "sub"      => SUB,
+            "shr"      => SHR,
+            "subr"     => SUBR,
+            "shl"      => SHL,
+            "rand"     => RAND,
+            "draw"     => DRAW,
+            "writebcd" => WRITEBCD,
+            "write"    => WRITE,
+            "read"     => READ,
+            _ => Mnemonic::UNKNOWN,
+        }
     }
     
     fn chunk(&self) -> &str {
         &self.line[self.index..self.delim]
     }
     
-    fn peek(&self, i: usize) -> char {
-        self.line.chars().nth(self.index+i).unwrap()
+    fn peek(&self, i: usize) -> Option<char> {
+        self.line.chars().nth(self.index+i)
     }
 }

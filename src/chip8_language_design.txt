@@ -1,33 +1,34 @@
-jump nnn
-jump0 nnn
-neq [vx] nn (else/begin end)
-neq [vx] [vy] (else/begin end)
-eq [vx] nn (else/begin end)
-eq [key] (else/begin end)
-neq [key] (else/begin end)
-set [vx] [key]
-set [vx] nn
-set [vx] [vy]
-set [i] nnn
-set [vx] [dt]
-set [dt] [vx]
-set [vx] [st]
-set [i] [vx]
-add [vx] nn
-add [vx] [vy]
-add [i] [vx]
-sub [vx] [vy]
-subr [vx] [vy]
-or [vx] [vy]
-xor [vx] [vy]
-shr [vx] [vy]
-shl [vx] [vy]
-and [vx] [vy]
-rand [vx] nn
-writebcd [vx]
-read [vx]
-write [vx]
-draw [vx] [vy] n
-clear
-begin (nnn)
-end
+0x1NNN jump     nnn
+0xBNNN jump0    nnn
+0x3XNN neq      %vx  nn
+0x5XY0 neq      %vx  %vy
+0x4XNN eq       %vx  nn
+0x9XYN eq       %vx  %vy
+0xEXA1 eq       %key
+0xEX9E neq      %key
+0xFX0A set      %vx  %key
+0x6XNN set      %vx  nn
+0x8XYN set      %vx  %vy
+0xANNN set      %i   nnn
+0xFX07 set      %vx  %dt
+0xFX15 set      %dt  %vx
+0xFX18 set      %vx  %st
+0xFX29 set      %i   %vx
+0x7XNN add      %vx  nn
+0x8XYN add      %vx  %vy
+0xFX1E add      %i   %vx
+0x8XY5 sub      %vx  %vy
+0x8XY7 subr     %vx  %vy
+0x8XY1 or       %vx  %vy
+0x8XY3 xor      %vx  %vy
+0x8XY6 shr      %vx  %vy
+0x8XYE shl      %vx  %vy
+0x8XY2 and      %vx  %vy
+0xCXNN rand     %vx  nn
+0xFX33 writebcd %vx
+0xFX65 read     %vx
+0xFX55 write    %vx
+0xDXYN draw     %vx  %vy n
+0x00E0 clear
+0x2NNN begin    (nnn)
+0x00EE end

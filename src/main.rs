@@ -1,15 +1,15 @@
 mod scanner;
 mod parser;
 mod tokens;
-use std::{fs::File, io::BufReader, env};
+use std::{fs::File, io::{Write, BufReader}, env};
 use crate::{scanner::Scanner, parser::parse};
 
 fn main() {
-    let file = {
+    let (filename, file) = {
         match env::args().nth(1) {
             Some(filename) => {
-                match File::open(filename) {
-                    Ok(file) => file,
+                match File::open(&filename) {
+                    Ok(file) => (filename.to_string(), file),
                     Err(_) => { eprintln!("Cannot read file"); std::process::exit(1); }
                 }},
             None => { eprintln!("Please enter a file"); std::process::exit(1); }}
@@ -24,8 +24,13 @@ fn main() {
     for instruction in scanner.instructions.iter() {
         let (mnemonic, registers, arguments) = instruction;
         let opcode = parse(&mnemonic, &registers, &arguments);
-        println!("{:X}", opcode);
-
-        opcodes.push(opcode);
+        //println!("{:X}", opcode);
+        let h2 = (opcode & 0x00FF) as u8;
+        let h1 = ((opcode & 0xFF00) >> 8) as u8;
+        opcodes.append(&mut vec![h1,h2]);
     }
+
+    let mut compiled_file = File::create(filename + ".bin").unwrap();
+
+    compiled_file.write(&opcodes).unwrap();
 }

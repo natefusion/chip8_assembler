@@ -12,13 +12,14 @@ pub fn parse(mnemonic: &Mnemonic, registers: &Vec<Register>, arguments: &Vec<usi
     let (mut opcode_shell, opcode_info) = match mnemonic {
         EQ => {
             match (register.next(), register.next()) {
-                (Some(V),   None) => (0x4000, 0x82),
-                (Some(KEY), None) => (0xE0A1, 0x81),
+                (Some(V), Some(V)) => (0x9000, 0x482),
+                (Some(V),   None)  => (0x4000, 0x82),
+                (Some(KEY), None)  => (0xE0A1, 0x81),
                 _ => (0xF, 0xF) }},
 
         NEQ => {
             match (register.next(), register.next()) {
-                (Some(KEY), None)    => (0xE09E, 0x81),
+                (Some(KEY), None)   => (0xE09E, 0x81),
                 (Some(V),   Some(V)) => (0x5000, 0x482),
                 (Some(V),   None)    => (0x3000, 0x82),
                 _ => (0xF, 0xF) }},
