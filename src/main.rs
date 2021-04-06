@@ -9,7 +9,7 @@ fn main() {
         match env::args().nth(1) {
             Some(filename) => {
                 match File::open(&filename) {
-                    Ok(file) => (filename.to_string(), file),
+                    Ok(file) => (filename, file),
                     Err(_) => { eprintln!("Cannot read file"); std::process::exit(1); }
                 }},
             None => { eprintln!("Please enter a file"); std::process::exit(1); }}
@@ -21,16 +21,15 @@ fn main() {
 
     scanner.scan_file(&mut reader);
 
-    for instruction in scanner.instructions.iter() {
+    for instruction in scanner.instructions {
         let (mnemonic, registers, arguments) = instruction;
         let opcode = parse(&mnemonic, &registers, &arguments);
         //println!("{:X}", opcode);
-        let h2 = (opcode & 0x00FF) as u8;
-        let h1 = ((opcode & 0xFF00) >> 8) as u8;
-        opcodes.append(&mut vec![h1,h2]);
+        if let Some(mut x) = opcode {
+            opcodes.append(&mut x);
+        }
     }
 
-    let mut compiled_file = File::create(filename + ".bin").unwrap();
-
-    compiled_file.write(&opcodes).unwrap();
+    File::create(filename + ".bin").unwrap()
+        .write_all(&opcodes).unwrap();
 }

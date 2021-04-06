@@ -1,12 +1,10 @@
-#[derive(Clone)]
 pub enum Mnemonic {
-    CLEAR, END, JUMP, JUMP0, BEGIN, NEQ,
-    EQ, SET, ADD, OR, AND, XOR, SUB, SHR,
-    SUBR, SHL, RAND, DRAW, WRITEBCD, WRITE,
-    READ, UNKNOWN
+    Clear, End, Jump, Jump0, Begin, Neq,
+    Eq, Set, Add, Or, And, Xor, Sub, Shr,
+    Subr, Shl, Rand, Draw, Writebcd, Write,
+    Read
 }
 
-#[derive(Clone)]
 pub enum Register {
-    V, I, DT, ST, KEY, UNKNOWN
+    V, I, Dt, St, Key, Unknown
 }
