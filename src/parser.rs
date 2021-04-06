@@ -1,6 +1,6 @@
 use crate::tokens::{Mnemonic, Mnemonic::*, Register, Register::*};
 
-pub fn parse(mnemonic: &Mnemonic, registers: &[Register], arguments: &[usize]) -> Option<Vec<u8>> {
+pub fn parse(mnemonic: &Mnemonic, registers: &[Register], arguments: &[usize]) -> Result<Vec<u8>, String> {
     /*                  v- number of arguments
      * opcode_info: 0x482
      *                ^^- first argument is shifted 8 bits to the left,
@@ -63,7 +63,7 @@ pub fn parse(mnemonic: &Mnemonic, registers: &[Register], arguments: &[usize]) -
     };
 
     if arguments.len() != opcode_info & 0xF {
-        return None;
+        return Err(format!("Expected {} arguments, found {}", opcode_info & 0xF, arguments.len()));
     }
 
     for (i, val) in arguments.iter().enumerate() {
@@ -71,11 +71,11 @@ pub fn parse(mnemonic: &Mnemonic, registers: &[Register], arguments: &[usize]) -
         let max = if shift == 0 { 0xFFFF >> ((opcode_info & 0xF) * 4) } else { 0xF };
 
         if *val > max {
-            return None;
+            return Err(format!("0x{:X} ({}) is bigger than the max of 0x{:X} ({})", val, val, max, max));
         }
 
         opcode_shell |= val << shift;
     }
 
-    Some(vec![((opcode_shell & 0xFF00) >> 8) as u8, (opcode_shell & 0x00FF) as u8])
+    Ok(vec![((opcode_shell & 0xFF00) >> 8) as u8, (opcode_shell & 0x00FF) as u8])
 }

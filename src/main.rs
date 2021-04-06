@@ -21,15 +21,29 @@ fn main() {
 
     scanner.scan_file(&mut reader);
 
-    for instruction in scanner.instructions {
-        let (mnemonic, registers, arguments) = instruction;
-        let opcode = parse(&mnemonic, &registers, &arguments);
-        //println!("{:X}", opcode);
-        if let Some(mut x) = opcode {
-            opcodes.append(&mut x);
+    if scanner.errors.len() == 0 {
+        let mut parse_error = false;
+        for instruction in scanner.instructions {
+            let (mnemonic, registers, arguments) = instruction;
+            let opcode = parse(&mnemonic, &registers, &arguments);
+            match opcode {
+                Ok(mut x) => opcodes.append(&mut x),
+                Err(error) => { parse_error = true; eprintln!("{}",error); },
+            }
         }
+        
+        if !parse_error {
+            File::create(filename + ".bin").unwrap()
+                .write_all(&opcodes).unwrap();
+        }
+    } else {
+        for error in scanner.errors {
+            let (msg, line, line_index, index) = error;
+            
+            eprintln!("{} found on line {} at character {}\n{}\n",
+                      msg, line_index, index, line
+            );
+        }
+        std::process::exit(1);
     }
-
-    File::create(filename + ".bin").unwrap()
-        .write_all(&opcodes).unwrap();
 }

@@ -6,5 +6,5 @@ pub enum Mnemonic {
 }
 
 pub enum Register {
-    V, I, Dt, St, Key, Unknown
+    V, I, Dt, St, Key
 }

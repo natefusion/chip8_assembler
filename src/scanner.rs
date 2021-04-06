@@ -13,8 +13,10 @@ pub struct Scanner {
     line: String,
     delim: usize,
     index: usize,
+    line_index: usize,
     annotations: Vec<(String, usize)>,
     pub instructions: Vec<(Mnemonic, Vec<Register>, Vec<usize>)>,
+    pub errors: Vec<(String, String, usize, usize)>,
 }
 
 impl Scanner {
@@ -23,16 +25,19 @@ impl Scanner {
             line: String::new(),
             delim: 0,
             index: 0,
+            line_index: 0,
             annotations: vec![],
             instructions: vec![],
+            errors: vec![],
         }
     }
 
     pub fn scan_file(&mut self, file: &mut BufReader<File>) {
-        for line in file.lines().map(|l| l.unwrap().trim().to_ascii_lowercase()) {
+        for (index, line) in file.lines().map(|l| l.unwrap().trim().to_ascii_lowercase()).enumerate() {
             self.line = line;
             self.delim = 0;
             self.index = 0;
+            self.line_index = index;
             self.scan_line();
         }
     }
@@ -57,18 +62,24 @@ impl Scanner {
      */
     fn scan_chunk(&mut self) {
         match self.peek(0).unwrap() {
-            '%'       => self.scan_register(),
-            '0'..='9' => self.scan_number(),
-            ';'       => self.delim = self.line.len(), // The rest of a line is skipped if there is a comment
+            '%' => self.scan_register(),
+            '0'..='9' => {
+                let radix = match self.peek(1) {
+                    Some('x') => { self.index += 2; 16 },
+                    _ => 10,
+                };
+                self.scan_number(radix);
+            },
+            
+            ';' => self.delim = self.line.len(), // The rest of a line is skipped if there is a comment
+            
             _ => {
-                // Maybe merge these two methods into one?
-                // Maybe have annotations work like a stack maybe?
-                self.scan_annotation();
-                self.scan_mnemonic();
-
-                // Replaces an annotation with a number if found
-                if let Some(annotation) = self.annotations.iter().find(|&x| x.0 == self.chunk()) {
-                    self.instructions.last_mut().unwrap().2.push(annotation.1);
+                if !self.scan_annotation() && !self.scan_mnemonic() {
+                    // Replaces an annotation with a number if found
+                    if let Some(annotation) = self.annotations.iter().find(|&x| x.0 == self.chunk()) {
+                        self.instructions.last_mut().unwrap().2.push(annotation.1);
+                        
+                    } else { self.push_error("Unknown chunk".to_string()); }
                 }
             },
         }
@@ -84,47 +95,46 @@ impl Scanner {
         self.index += 1;
         let register = {
             match self.chunk() {
-                _ if self.peek(0).unwrap() == 'v' => {
-                    self.index += 1;
-                    let argument = usize::from_str_radix(self.chunk(), 16).unwrap();
-                    self.instructions.last_mut().unwrap().2.push(argument);
-                    V
-                },
                 "i"   => I,
                 "dt"  => Dt,
                 "st"  => St,
                 "key" => Key,
-                _     => Register::Unknown,
+                _ => {
+                    if self.peek(0).unwrap() == 'v' {
+                        self.index += 1;
+                        self.scan_number(16);
+                        V
+                    } else { self.push_error("Not a register".to_string()); return; }
+                },
             }
         };
         
         self.instructions.last_mut().unwrap().1.push(register);
     }
         
-    fn scan_number(&mut self) {
-        let radix = {
-            if let Some('x') = self.peek(1) {
-                self.index += 2;
-                16 
-            } else {
-                10 
-            }
-        };
-
-        let argument = usize::from_str_radix(self.chunk(), radix).unwrap();
-        self.instructions.last_mut().unwrap().2.push(argument);
-    }
-
-    fn scan_annotation(&mut self) {
-        if &self.line[self.delim-1..self.delim] == ":" {
-            let annotation = self.line[self.index..self.delim-1].to_string();
-            let pc         = self.instructions.len() * 2 + 0x200;
-
-            self.annotations.push((annotation, pc));
+    fn scan_number(&mut self, radix: u32) {
+        match usize::from_str_radix(self.chunk(), radix) {
+            Ok(argument) => self.instructions.last_mut().unwrap().2.push(argument),
+            Err(_) => self.push_error("Not a number".to_string()),
         }
     }
-    
-    fn scan_mnemonic(&mut self) {
+
+    fn scan_annotation(&mut self) -> bool {
+        if self.delim-1 - self.index > 0 &&
+            &self.line[self.delim-1..self.delim] == ":" {
+                
+            let annotation = self.line[self.index..self.delim-1].to_string();
+            let pc         = self.instructions.len() * 2 + 0x200;
+            
+            self.annotations.push((annotation, pc));
+
+            true
+        } else {
+            false
+        }
+    }
+
+    fn scan_mnemonic(&mut self) -> bool {
         self.instructions.push((
             match self.chunk() {
                 "clear"    => Clear,
@@ -148,13 +158,24 @@ impl Scanner {
                 "writebcd" => Writebcd,
                 "write"    => Write,
                 "read"     => Read,
-                _ => return,
+                _ => return false,
             },
             vec![],
             vec![]
         ));
+
+        true
     }
     
+    fn push_error(&mut self, msg: String) {
+        self.errors.push((
+            msg,
+            self.line.clone(),
+            self.line_index,
+            self.index,
+        ));
+    }
+
     fn chunk(&self) -> &str {
         &self.line[self.index..self.delim]
     }
