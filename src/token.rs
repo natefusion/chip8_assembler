@@ -17,7 +17,7 @@ pub enum Token<'a> {
     NUM(usize),
 
     REGISTER(Register),
-    ALIAS,
+    ALIAS, CONST
 }
 
 pub enum Mnemonic {

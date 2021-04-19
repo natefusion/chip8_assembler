@@ -6,6 +6,7 @@ pub struct Scanner<'a> {
     tokens: &'a mut Peekable<Iter<'a, Token<'a>>>,
     labels: HashMap<&'a str, usize>,
     aliases: HashMap<&'a str, &'a Register>,
+    variables: HashMap<&'a str, usize>,
     pub instructions: Vec<(&'a Mnemonic, Vec<&'a Register>, Vec<usize>)>,
 }
 
@@ -15,6 +16,7 @@ impl<'a> Scanner<'a> {
             tokens,
             labels: HashMap::new(),
             aliases: HashMap::new(),
+            variables: HashMap::new(),
             instructions: vec![]
         }
     }
@@ -37,12 +39,13 @@ impl<'a> Scanner<'a> {
                 REGISTER(x) => self.push_register(x),
                 NUM(x)      => self.push_argument(*x),
                 LABEL(label) => self.label(line, label),
-                ALIAS => self.alias(),
+                CONST | ALIAS => self.substitute(),
                 _ => {},
             }
         }
     }
 
+    // Problems occur if there is a const and alias set to the same thing, pls fix
     fn label(&mut self, line: usize, label: &'a str) {
         if let Some(COLON) = self.tokens.peek() {
             self.labels.insert(label, line);
@@ -50,25 +53,34 @@ impl<'a> Scanner<'a> {
             self.push_argument(l * 2 + 0x200);
         } else if let Some(&r) = self.aliases.get(&label) {
             self.push_register(r);
+        } else if let Some(&a) = self.variables.get(&label) {
+            self.push_argument(a);
         } else {
-            self.error(format!("unknown jump label found '{}'", label));
+            self.error(format!("unknown label found '{}'", label));
         }
     }
 
-    fn alias(&mut self) {
+    fn substitute(&mut self) {
+        match (self.tokens.next(), self.tokens.next()) {
+            (Some(LABEL(name)), Some(REGISTER(register))) => { self.aliases.insert(name, register); },
+            (Some(LABEL(name)), Some(NUM(num))) => { self.variables.insert(name, *num); },
+            _ => self.error("That's not how you make an alias. TRY AGAIN".to_string()),
+        }
+        /*
         if let (Some(LABEL(name)), Some(REGISTER(register))) = (self.tokens.next(), self.tokens.next()) {
             self.aliases.insert(name, register);
         } else {
           self.error("That's not how you make an alias. TRY AGAIN".to_string());
         }
+         */
     }
 
     fn error(&self, msg: String) {
-        eprintln!("Error: {}",msg);
+        eprintln!("Error: {}", msg);
         std::process::exit(1);
     }
 
-    fn push_mnemonic(&mut self, mnemonic: &'a Mnemonic) { self.instructions.push((mnemonic, vec![], vec![]));     }
+    fn push_mnemonic(&mut self, mnemonic: &'a Mnemonic) { self.instructions.push((mnemonic, vec![], vec![])); }
 
     fn push_register(&mut self, register: &'a Register) {
         if let Register::V(x) = register { self.push_argument(*x); }

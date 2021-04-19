@@ -114,7 +114,7 @@ impl<'a> Lexer<'a> {
     }
 
     fn word(&mut self) {
-        self.delim = match self.data[self.index..].find(|c: char| !c.is_ascii_lowercase()) {
+        self.delim = match self.data[self.index..].find(|c: char| !c.is_alphanumeric()) {
             Some(x) => self.index + x,
             _ => self.data.len()
         };
@@ -143,6 +143,7 @@ impl<'a> Lexer<'a> {
                 "write"    => MNEMONIC(WRITE),
                 "read"     => MNEMONIC(READ),
                 "alias"    => ALIAS,
+                "const"    => CONST,
                 _ => LABEL(&self.data[self.index..self.delim]),
         });
 
