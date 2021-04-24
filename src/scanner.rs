@@ -66,13 +66,6 @@ impl<'a> Scanner<'a> {
             (Some(LABEL(name)), Some(NUM(num))) => { self.variables.insert(name, *num); },
             _ => self.error("That's not how you make an alias. TRY AGAIN".to_string()),
         }
-        /*
-        if let (Some(LABEL(name)), Some(REGISTER(register))) = (self.tokens.next(), self.tokens.next()) {
-            self.aliases.insert(name, register);
-        } else {
-          self.error("That's not how you make an alias. TRY AGAIN".to_string());
-        }
-         */
     }
 
     fn error(&self, msg: String) {
@@ -81,13 +74,11 @@ impl<'a> Scanner<'a> {
     }
 
     fn push_mnemonic(&mut self, mnemonic: &'a Mnemonic) { self.instructions.push((mnemonic, vec![], vec![])); }
-
+    
     fn push_register(&mut self, register: &'a Register) {
         if let Register::V(x) = register { self.push_argument(*x); }
         self.instructions.last_mut().unwrap().1.push(register);
     }
     
     fn push_argument(&mut self, argument: usize) { self.instructions.last_mut().unwrap().2.push(argument); }
-
-            
 }
