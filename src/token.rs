@@ -1,14 +1,75 @@
-use std::fmt;
+use std::{collections::HashMap, fmt};
+use lazy_static::lazy_static;
+
+lazy_static! {
+    pub static ref MNEMONICS: HashMap<&'static str, Token> = [
+        ("clear",    Token::Clear),
+        ("end",      Token::End),
+        ("jump",     Token::Jump),
+        ("jump0",    Token::Jump0),
+        ("begin",    Token::Begin),
+        ("neq",      Token::Neq),
+        ("eq",       Token::Eq),
+        ("set",      Token::Set),
+        ("add",      Token::Add),
+        ("or",       Token::Or),
+        ("and",      Token::And),
+        ("xor",      Token::Xor),
+        ("sub",      Token::Sub),
+        ("shr",      Token::Shr),
+        ("subr",     Token::Subr),
+        ("shl",      Token::Shl),
+        ("rand",     Token::Rand),
+        ("draw",     Token::Draw),
+        ("writebcd", Token::Writebcd),
+        ("write",    Token::Write),
+        ("read",     Token::Read)
+    ].iter().cloned().collect();
+}
+
+lazy_static! {
+    pub static ref REGISTERS: HashMap<&'static str, Token> = [
+        ("%v0",  Token::V(0x0)),
+        ("%v1",  Token::V(0x1)),
+        ("%v2",  Token::V(0x2)),
+        ("%v3",  Token::V(0x3)),
+        ("%v4",  Token::V(0x4)),
+        ("%v5",  Token::V(0x5)),
+        ("%v6",  Token::V(0x6)),
+        ("%v7",  Token::V(0x7)),
+        ("%v8",  Token::V(0x8)),
+        ("%v9",  Token::V(0x9)),
+        ("%va",  Token::V(0xA)),
+        ("%vb",  Token::V(0xB)),
+        ("%vc",  Token::V(0xC)),
+        ("%vd",  Token::V(0xD)),
+        ("%ve",  Token::V(0xE)),
+        ("%vf",  Token::V(0xF)),
+        ("%i",   Token::I),
+        ("%dt",  Token::DT),
+        ("%st",  Token::ST),
+        ("%key", Token::Key)
+    ].iter().cloned().collect();
+}
+
+lazy_static! {
+    pub static ref MACROS: HashMap<&'static str, Token> = [
+        ("alias", Token::Alias),
+        ("const", Token::Const),
+        (":",     Token::Colon)
+    ].iter().cloned().collect();
+}
 
 pub struct TokenInfo {
     pub token: TokenType,
-    pub lexeme: &'static str,
-    pub line: usize,
+    pub lexeme: String,
+    pub index: usize,
 }
 
-#[derive(Copy,Clone)]
+#[derive(Copy, Clone)]
 pub enum Token {
-    Colon, Alias, Const, Identifier,
+    // Registers
+    V(usize), I, DT, ST, Key,
 
     // Mnemonics
     Clear, End, Jump, Jump0, Begin, Neq,
@@ -16,12 +77,17 @@ pub enum Token {
     Subr, Shl, Rand, Draw, Writebcd, Write,
     Read,
 
-    // Registers
-    V, I, DT, ST, Key
+    // Macros
+    Colon, Alias, Const,
 }
 
+#[derive(Copy, Clone)]
 pub enum TokenType {
-    Mnemonic(Token), Register(Token), Number(usize), Other(Token)
+    Identifier(u64),
+    Mnemonic(Token),
+    Register(Token),
+    Macro(Token),
+    Number(usize),
 }
 
 impl fmt::Debug for Token {
@@ -31,7 +97,6 @@ impl fmt::Debug for Token {
                 Token::Colon => "Colon",
                 Token::Alias => "Alias",
                 Token::Const => "Const",
-                Token::Identifier => "Identifier",
                 Token::Clear => "Clear",
                 Token::End => "End",
                 Token::Jump => "Jump",
@@ -53,7 +118,7 @@ impl fmt::Debug for Token {
                 Token::Writebcd => "Writebcd",
                 Token::Write => "Write",
                 Token::Read => "Read",
-                Token::V => "V",
+                Token::V(_) => "V",
                 Token::I => "I",
                 Token::DT => "DT",
                 Token::ST => "ST",
@@ -69,7 +134,8 @@ impl fmt::Debug for TokenType {
             TokenType::Number(x) => f.write_fmt(format_args!("Number:{:?}",x)),
             TokenType::Mnemonic(x) => f.write_fmt(format_args!("Mnemonic:{:?}",x)),
             TokenType::Register(x) => f.write_fmt(format_args!("Register:{:?}",x)),
-            TokenType::Other(x) => f.write_fmt(format_args!("{:?}",x)),
+            TokenType::Macro(x) => f.write_fmt(format_args!("{:?}",x)),
+            TokenType::Identifier(x) => f.write_fmt(format_args!("Identifier: {}",x)),
         }
     }
 }

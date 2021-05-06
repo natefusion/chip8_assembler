@@ -41,7 +41,7 @@ impl<'a> Scanner<'a> {
             
             Number(x) => { self.instructions.last_mut().unwrap().2.push(x); },
             
-            Other(t) => match t {
+            Macro(t) => match t {
                 Colon => {
                     if let Some(key) = self.tokens.next() {
                         let pc = self.instructions.len();
@@ -51,7 +51,7 @@ impl<'a> Scanner<'a> {
                 
                 Const | Alias => {
                     if let (Some(key), Some(value)) = (self.tokens.next(), self.tokens.next()) {
-                        if let Other(Identifier) = &key.token {
+                        if let Identifier = &key.token {
                             match &value.token {
                                 Register(_) | Number(_) => { self.variables.insert(key.lexeme, value); },
                                 _ => {},
@@ -59,13 +59,12 @@ impl<'a> Scanner<'a> {
                         }
                     }
                 },
-                
-                Identifier => {
-                    if let Some(&t) = self.labels.get(&token.lexeme) { self.instructions.last_mut().unwrap().2.push(t * 2 + 0x200); }
-                    if let Some(&t) = self.variables.get(&token.lexeme) { self.push_token(t); }
-                },
-
                 _ => {},
+            },
+                
+            Identifier => {
+                if let Some(&t) = self.labels.get(&token.lexeme) { self.instructions.last_mut().unwrap().2.push(t * 2 + 0x200); }
+                if let Some(&t) = self.variables.get(&token.lexeme) { self.push_token(t); }
             },
         }
     }
