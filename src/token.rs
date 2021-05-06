@@ -1,69 +1,73 @@
-use std::{collections::HashMap, fmt};
-use lazy_static::lazy_static;
+use std::fmt;
+use Token::*;
 
-lazy_static! {
-    pub static ref MNEMONICS: HashMap<&'static str, Token> = [
-        ("clear",    Token::Clear),
-        ("end",      Token::End),
-        ("jump",     Token::Jump),
-        ("jump0",    Token::Jump0),
-        ("begin",    Token::Begin),
-        ("neq",      Token::Neq),
-        ("eq",       Token::Eq),
-        ("set",      Token::Set),
-        ("add",      Token::Add),
-        ("or",       Token::Or),
-        ("and",      Token::And),
-        ("xor",      Token::Xor),
-        ("sub",      Token::Sub),
-        ("shr",      Token::Shr),
-        ("subr",     Token::Subr),
-        ("shl",      Token::Shl),
-        ("rand",     Token::Rand),
-        ("draw",     Token::Draw),
-        ("writebcd", Token::Writebcd),
-        ("write",    Token::Write),
-        ("read",     Token::Read)
-    ].iter().cloned().collect();
+pub fn mnemonic(lexeme: &str) -> Result<(TokenType, Token), String> {
+    match lexeme {
+        "clear"    => Ok((Mnemonic, Clear)),
+        "end"      => Ok((Mnemonic, End)),
+        "jump"     => Ok((Mnemonic, Jump)),
+        "jump0"    => Ok((Mnemonic, Jump0)),
+        "begin"    => Ok((Mnemonic, Begin)),
+        "neq"      => Ok((Mnemonic, Neq)),
+        "eq"       => Ok((Mnemonic, Eq)),
+        "set"      => Ok((Mnemonic, Set)),
+        "add"      => Ok((Mnemonic, Add)),
+        "or"       => Ok((Mnemonic, Or)),
+        "and"      => Ok((Mnemonic, And)),
+        "xor"      => Ok((Mnemonic, Xor)),
+        "sub"      => Ok((Mnemonic, Sub)),
+        "shr"      => Ok((Mnemonic, Shr)),
+        "subr"     => Ok((Mnemonic, Subr)),
+        "shl"      => Ok((Mnemonic, Shl)),
+        "rand"     => Ok((Mnemonic, Rand)),
+        "draw"     => Ok((Mnemonic, Draw)),
+        "writebcd" => Ok((Mnemonic, Writebcd)),
+        "write"    => Ok((Mnemonic, Write)),
+        "read"     => Ok((Mnemonic, Read)),
+        x          => Err(format!("Expected a mnemonic, found: {}", x)),
+    }
 }
 
-lazy_static! {
-    pub static ref REGISTERS: HashMap<&'static str, Token> = [
-        ("%v0",  Token::V(0x0)),
-        ("%v1",  Token::V(0x1)),
-        ("%v2",  Token::V(0x2)),
-        ("%v3",  Token::V(0x3)),
-        ("%v4",  Token::V(0x4)),
-        ("%v5",  Token::V(0x5)),
-        ("%v6",  Token::V(0x6)),
-        ("%v7",  Token::V(0x7)),
-        ("%v8",  Token::V(0x8)),
-        ("%v9",  Token::V(0x9)),
-        ("%va",  Token::V(0xA)),
-        ("%vb",  Token::V(0xB)),
-        ("%vc",  Token::V(0xC)),
-        ("%vd",  Token::V(0xD)),
-        ("%ve",  Token::V(0xE)),
-        ("%vf",  Token::V(0xF)),
-        ("%i",   Token::I),
-        ("%dt",  Token::DT),
-        ("%st",  Token::ST),
-        ("%key", Token::Key)
-    ].iter().cloned().collect();
+pub fn register(lexeme: &str) -> Result<(TokenType, Token), String> {
+    match lexeme {
+        "%v0"  => Ok((Register, V(0x0))),
+        "%v1"  => Ok((Register, V(0x1))),
+        "%v2"  => Ok((Register, V(0x2))),
+        "%v3"  => Ok((Register, V(0x3))),
+        "%v4"  => Ok((Register, V(0x4))),
+        "%v5"  => Ok((Register, V(0x5))),
+        "%v6"  => Ok((Register, V(0x6))),
+        "%v7"  => Ok((Register, V(0x7))),
+        "%v8"  => Ok((Register, V(0x8))),
+        "%v9"  => Ok((Register, V(0x9))),
+        "%va"  => Ok((Register, V(0xA))),
+        "%vb"  => Ok((Register, V(0xB))),
+        "%vc"  => Ok((Register, V(0xC))),
+        "%vd"  => Ok((Register, V(0xD))),
+        "%ve"  => Ok((Register, V(0xE))),
+        "%vf"  => Ok((Register, V(0xF))),
+        "%i"   => Ok((Register, I)),
+        "%dt"  => Ok((Register, DT)),
+        "%st"  => Ok((Register, ST)),
+        "%key" => Ok((Register, Key)),
+        x      => Err(format!("Expected a register, found: {}", x)),
+    }
 }
 
-lazy_static! {
-    pub static ref MACROS: HashMap<&'static str, Token> = [
-        ("alias", Token::Alias),
-        ("const", Token::Const),
-        (":",     Token::Colon)
-    ].iter().cloned().collect();
+pub fn macro(lexeme: &str) -> Result<(TokenType, Token), String> {
+    match lexeme {
+        "alias" => Ok((Macro, Alias)),
+        "const" => Ok((Macro, Const)),
+        ":"     => Ok((Macro, Colon)),
+        x       => Err(format!("Expeceted a macro, found: {}", x)),
+    }
 }
 
 pub struct TokenInfo {
-    pub token: TokenType,
-    pub lexeme: String,
-    pub index: usize,
+    pub tt: TokenType,
+    pub t: Token,
+    pub l: String,
+    pub i: usize,
 }
 
 #[derive(Copy, Clone)]

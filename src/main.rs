@@ -13,7 +13,7 @@ fn tokenize(lexeme: &str) -> Result<TokenType, String> {
     let c = |x| lexeme.chars().nth(x);
 
     match c(0).unwrap() {
-        '%' => match token::REGISTERS.get(lexeme) {
+        '%' => match token::registers(lexeme) {
             Some(x) => Ok(TokenType::Register(*x)),
             None    => Err(format!("Expected a Register, found: {}", lexeme)),
         },
@@ -40,6 +40,21 @@ fn tokenize(lexeme: &str) -> Result<TokenType, String> {
                 })
             })
         },
+    }
+}
+
+fn scan(token: TokenType) {
+    match token {
+        Mnemonic(x) => { instructions.push((*x, vec![], vec![])); },
+        
+        Register(x) => {
+            if let V(n) = x { instructions.last_mut().unwrap().2.push(*n); }
+            instructions.last_mut().unwrap().1.push(*x);
+        },
+            
+        Number(x) => { instructions.last_mut().unwrap().2.push(*x); },
+
+        _ => {},
     }
 }
 
@@ -79,43 +94,19 @@ fn main() {
     
     while let Some(token) = iter.next() {
         match token {
-            Mnemonic(x) => { instructions.push((*x, vec![], vec![])); },
-            
-            Register(x) => {
-                if let V(n) = x { instructions.last_mut().unwrap().2.push(*n); }
-                instructions.last_mut().unwrap().1.push(*x);
-            },
-            
-            Number(x) => { instructions.last_mut().unwrap().2.push(*x); },
-
-            Identifier(x) => {
-                if let Some(t) = variables.get(x) {
-                    // code duplication, pls fix
-                    match t {
-                        Mnemonic(x) => { instructions.push((*x, vec![], vec![])); },
-                        
-                        Register(x) => {
-                            if let V(n) = x { instructions.last_mut().unwrap().2.push(*n); }
-                            instructions.last_mut().unwrap().1.push(*x);
-                        },
-                        
-                        Number(x) => { instructions.last_mut().unwrap().2.push(*x); },
-                        
-                        _ => {},
-                    }
-                }
-            },
+            Identifier(x) => if let Some(t) = variables.get(x) { scan(token); },
             
             Macro(x) => {
                 if let Some(Identifier(i)) = iter.next() {
                     match (x, iter.peek()) {
-                        (Alias, Some(Register(_))) => { variables.insert(i, *iter.next().unwrap()); },
-                        (Const, Some(Number(_))) => { variables.insert(i, *iter.next().unwrap()); },
+                        (Alias | Const, Some(Register(_)) | Some(Number(_))) => { variables.insert(i, *iter.next().unwrap()); },
                         (Colon, _) => { variables.insert(i, Number((instructions.len()) * 2 + 0x200)); },
                         _ => {},
                     }
                 }
             },
+
+            _ => scan(token),
 
         }
     }
