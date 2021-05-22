@@ -1,33 +1,44 @@
 ## Chip8 assembler general desgin ##
 
-main:
-        input = file::read()
-        output = file::new()
+Load file into string.
 
-        // Holds information about annotations
-        struct Annotation:
-               pc,
-               annotation,
+Create tokens from the string
 
-        annotation_array;
+Tokens are deliminated by whitespace
 
-        pc = 0
-        for line in input:
-            let has_mnemonic = has_mnemonic(line)
-            
-            if has_mnemonic == true:
-               args = process_args(line)
-            
-                // returns [arg0_mod, arg1_mod, arg2_mod, mnemonic_template]
-                // arg#_mod will be the value to for how many times to bit shift the args to get proper values
-                template = get_mnemonic_template(line)
-
-                // Returns a properly formatted opcode to be written to a file
-                let opcode = assemble(template, args)
-
-                output.write(opcode)
-                pc += 1
+A Token struct should contain this information:
+        The kind of token
+                Func:  any token that performs an action on parameters
+                Reg:   any of the registers on the chip8 (i, v[0-f], dt, st, key (not a real register))
+                Const: any number
+                Ident: any string of characters that doesn't start with a number
                 
-            else:
-                annotation = get_annotation(line)
-                annotation_array.push(Annotation { pc,annotation, })
+        The specific token (e.g. draw, define, i...) (This should probably be contained inside of the kind of token)
+        The raw token (a string)
+        The line that it was located on
+        the character on that line that it was located on
+
+(When should I separate the V register? Now? Later? Earlier?)
+
+The next step is to organize our data into using this Function struct:
+        Func
+        All following tokens until the next Func
+
+Next step is to grab all of the "define"s and ":"s and do a search and replace
+
+Then turn the consts into numbers types and put all the information into the Instruction struct
+
+An Instruction struct should contain this information:
+        Mnemonic: a specific token representing one of the 34 mnemonics
+        register: an array of specific tokens representing registers
+        argument: an array of specific tokens representing constants
+
+
+
+
+       
+        
+        
+
+
+
