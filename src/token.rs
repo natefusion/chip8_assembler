@@ -1,4 +1,5 @@
 use {Keyword::*, Category::*};
+use std::{cmp::{Eq, PartialEq}, hash::{Hash, Hasher}};
 
 pub struct Token {
     pub category: Category,
@@ -7,24 +8,34 @@ pub struct Token {
     pub ch: usize,
 }
 
+pub struct Instruction {
+    pub function: Keyword,
+    pub registers: Vec<Keyword>,
+    pub arguments: Vec<usize>,
 
+    pub line: usize,
+    pub ch: usize,
+}
+
+#[derive(Copy, Clone)]
 pub enum Keyword {
     V, I, Dt, St, Key,
     
     Clear, Return, Jump, Jump0, Call, Neq,
     Eq, Set, Add, Or, And, Xor, Sub, Shr,
-    Subr, Shl, Rand, Draw, Writebcd, Write,
+    Subr, Shl, Rand, Draw, Bcd, Write,
     Read,
     
-    Colon, Define,
+    Colon, Define, Unk,
 }
 
+#[derive(Copy, Clone)]
 pub enum Category {
-    Function(Keyword),
-    Definition(Keyword),
-    Register(Keyword),
-    Number,
-    Identifier,
+    Func(Keyword),
+    Def(Keyword),
+    Reg(Keyword),
+    Num,
+    Ident,
 }
 
 impl Token {
@@ -34,46 +45,72 @@ impl Token {
 
     fn tokenize(raw: &str) -> Category {
         match raw.chars().nth(0).unwrap() {
-            '0'..='9' => Number,
+            '0'..='9' => Num,
             
-            'v' => Register(V),
-            'i' => Register(I),
-            ':' => Definition(Colon),
+            'v' => Reg(V),
+            'i' => Reg(I),
+            ':' => Def(Colon),
             
             'a'..='z' |
             'A'..='Z' => match raw {
-                "clear"    => Function(Clear),
-                "return"   => Function(Return),
-                "jump"     => Function(Jump),
-                "jump0"    => Function(Jump0),
-                "call"     => Function(Call),
-                "neq"      => Function(Neq),
-                "eq"       => Function(Eq),
-                "set"      => Function(Set),
-                "add"      => Function(Add),
-                "or"       => Function(Or),
-                "and"      => Function(And),
-                "xor"      => Function(Xor),
-                "sub"      => Function(Sub),
-                "shr"      => Function(Shr),
-                "subr"     => Function(Subr),
-                "shl"      => Function(Shl),
-                "rand"     => Function(Rand),
-                "draw"     => Function(Draw),
-                "writebcd" => Function(Writebcd),
-                "write"    => Function(Write),
-                "read"     => Function(Read),
+                "clear"    => Func(Clear),
+                "return"   => Func(Return),
+                "jump"     => Func(Jump),
+                "jump0"    => Func(Jump0),
+                "call"     => Func(Call),
+                "neq"      => Func(Neq),
+                "eq"       => Func(Eq),
+                "set"      => Func(Set),
+                "add"      => Func(Add),
+                "or"       => Func(Or),
+                "and"      => Func(And),
+                "xor"      => Func(Xor),
+                "sub"      => Func(Sub),
+                "shr"      => Func(Shr),
+                "subr"     => Func(Subr),
+                "shl"      => Func(Shl),
+                "rand"     => Func(Rand),
+                "draw"     => Func(Draw),
+                "bcd"      => Func(Bcd),
+                "write"    => Func(Write),
+                "read"     => Func(Read),
                 
-                "define" => Definition(Define),
+                "define" => Def(Define),
 
-                "dt"  => Register(Dt),
-                "st"  => Register(St),
-                "key" => Register(Key),
+                "dt"  => Reg(Dt),
+                "st"  => Reg(St),
+                "key" => Reg(Key),
 
-                _ => Identifier,
+                _ => Ident,
             }
 
-            _ => Identifier,
+            _ => Ident,
         }
     }
 }
+
+impl Instruction {
+    pub fn new(token: &Token, function: Keyword) -> Self {
+        Self {
+            function,
+            registers: vec![],
+            arguments: vec![],
+            line: token.line,
+            ch: token.ch,
+        }
+    }
+}
+
+impl Hash for Token {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.raw.hash(state);
+    }
+}
+
+impl PartialEq for Token {
+    fn eq(&self, other: &Self) -> bool {
+        self.raw == other.raw
+    }
+}
+
+impl Eq for Token {}
