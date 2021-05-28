@@ -5,7 +5,8 @@ use std::{fs, env, process, collections::HashMap, slice::Iter};
 use crate::token::{Token, Instruction, Category::*, Keyword::*};
 use lazy_static::lazy_static;
 
-fn tokenize(tokenstream: &'static str) -> Vec<Token> {
+fn lex(tokenstream: &'static str) -> Vec<Token> {
+    // Tokens are separated by whitespace
     tokenstream
         .lines()
         .enumerate()
@@ -26,13 +27,14 @@ fn tokenize(tokenstream: &'static str) -> Vec<Token> {
 }
 
 fn parse(tokenlist: &[Token]) -> Vec<Instruction> {
+    // This is just an object embedded in a function
     struct Env<'a> {
         instructions: Vec<Instruction>,
-        labels: HashMap<&'a Token, usize>,
-        definitions: HashMap<&'a Token, &'a Token>,
-        iter: Iter<'a, Token>,
+        labels:       HashMap<&'a Token, usize>,
+        definitions:  HashMap<&'a Token, &'a Token>,
+        iter:         Iter<'a, Token>,
     }
-
+    
     fn parse_token(token: &Token, env: &mut Env) {
         let mut push_number = |token: &Token| {
             let (x, radix) = if let Some("0x") = token.raw.get(0..2) {
@@ -45,37 +47,38 @@ fn parse(tokenlist: &[Token]) -> Vec<Instruction> {
             
             match usize::from_str_radix(&token.raw[x..], radix) {
                 Ok(num) => { env.instructions.last_mut().unwrap().arguments.push(num); },
-                Err(_) => { eprintln!("Identifiers cannot start with numbers"); },
+                Err(_)  => { eprintln!("Identifiers cannot start with numbers");       },
             }
         };
         
         match token.category {
-            Func(function) => { env.instructions.push(Instruction::new(token, function)); },
+            Func(function) => { env.instructions.push(Instruction::new(function, token.line, token.ch)); },
 
-            Def(Colon) => {
-                if let Some(x @ Token { category: Ident, .. }) = env.iter.next() {
-                    env.labels.insert(&x, env.instructions.len() * 2 + 0x200);
+            // Def(Colon) and Def(Define) do almost exactly the same thing. Should I try to combine them? (Doing so would require a peekable iterator)
+            Def(Colon) => if let Some(x) = env.iter.next() {
+                match x.category {
+                    Ident => { env.labels.insert(&x, env.instructions.len() * 2 + 0x200); },
+                    _     => { eprintln!("Malformed label on line {}", x.line);          },
                 }
             },
 
-            Def(Define) => {
-                if let (Some(x), Some(y)) = (env.iter.next(), env.iter.next()) {
-                    match (x.category, y.category) {
-                        (Ident, Reg(_)) |
-                        (Ident, Num) => { env.definitions.insert(&x, &y); },
-                        _ => {},
-                    }
+            Def(Define) => if let (Some(x), Some(y)) = (env.iter.next(), env.iter.next()) {
+                match (&x.category, &y.category) {
+                    (Ident, Reg(_)) |
+                    (Ident, Num) => { env.definitions.insert(&x, &y); },
+                    _ => { eprintln!("Malformed definition on line {}", x.line); },
                 }
             },
 
             Ident => {
-                // check for intersections pls
-                if let Some(&x) = env.definitions.get(&token) {
-                    parse_token(&x, env);
-                } else if let Some(x) = env.labels.get(&token) {
-                    env.instructions.last_mut().unwrap().arguments.push(*x);
-                } else {
-                    eprintln!("Error, unknown identifier, or identifier defined as a label and definition on line {}", token.line);
+                let label = env.labels.get(&token);
+                let definition = env.definitions.get(&token);
+
+                match (label, definition) {
+                    (Some(_), Some(_)) => { eprintln!("Identifier {} was defined two times", token.raw);   },
+                    (Some(x), None   ) => { env.instructions.last_mut().unwrap().arguments.push(*x);       },
+                    (None,    Some(x)) => { parse_token(x, env);                                           },
+                    (None,    None   ) => { eprintln!("Error, unknown identifier on line {}", token.line); },
                 }
             }
 
@@ -92,9 +95,9 @@ fn parse(tokenlist: &[Token]) -> Vec<Instruction> {
 
     let mut env = Env {
         instructions: vec![],
-        labels: HashMap::new(),
-        definitions: HashMap::new(),
-        iter: tokenlist.iter()
+        labels:       HashMap::new(),
+        definitions:  HashMap::new(),
+        iter:         tokenlist.iter(),
     };
 
     while let Some(token) = env.iter.next() {
@@ -105,26 +108,28 @@ fn parse(tokenlist: &[Token]) -> Vec<Instruction> {
 }
 
 fn evaluate(instruction: &Instruction) -> Result<usize, String> {
-    let mnemonic = instruction.function;
+    let function = instruction.function;
     let mut register = instruction.registers.iter();
     let arguments = instruction.arguments.iter().enumerate();
     let line = instruction.line;
-    let ch = instruction.ch;
+    
+    // Makes next match statement look pretty
+    let (arg0, arg1) = match (register.next(), register.next()) {
+        (Some(x), Some(y)) => (*x,  *y),
+        (None,    Some(x)) => (Unk, *x),
+        (Some(x), None   ) => (*x,  Unk),
+        (None,    None   ) => (Unk, Unk),
+    };
+
     /*                  v- number of arguments
      * opcode_info: 0x482
-     *                ^^- first argument is shifted 8 bits to the left,
+     *                 ^- first argument is shifted 8 bits to the left,
      *                ^-- second argument is shifted 4 bits to the left
      *
      * The arguments are shifted so that they can be bitwise-ored into opcode_shell with ease
+     * This solution also keeps the match statement from getting ugly
      */
-    let (arg0, arg1) = match (register.next(), register.next()) {
-        (Some(x), Some(y)) => (*x,*y),
-        (None,    Some(x)) => (Unk, *x),
-        (Some(x), None) => (*x, Unk),
-        (None, None) => (Unk, Unk),
-    };
-    
-    let (mut opcode_shell, opcode_info) = match (mnemonic, arg0, arg1) {
+    let (mut opcode_shell, opcode_info) = match (function, arg0, arg1) {
         (Eq,     V,   V  ) => (0x9000, 0x482),
         (Eq,     V,   Unk) => (0x4000, 0x82),
         (Eq,     V,   Key) => (0xE0A1, 0x81),
@@ -169,19 +174,22 @@ fn evaluate(instruction: &Instruction) -> Result<usize, String> {
         (Jump,   Unk, Unk) => (0x1000, 0x1),
         (Jump0,  Unk, Unk) => (0xB000, 0x1),
 
-         _ => return Err(format!("Unknown instruction found on line {} at character {}", line, ch)),
+         _ => return Err(format!("Malformed instruction found on line {}", line)),
     };
+
+    let opcode_args = opcode_info & 0xF;
+    let args_shift = opcode_info >> 4;
     
-    if instruction.arguments.len() != opcode_info & 0xF {
-        return Err(format!("opcode: {:X}, Expected {} arguments, found {} on line {} at character {}", opcode_shell, opcode_info & 0xF, arguments.len(), line, ch));
+    if arguments.len() != opcode_args {
+        return Err(format!("Expected {} arguments, found {} on line {}", opcode_args, arguments.len(), line));
     }
 
     for (i, val) in arguments {
-        let shift = (opcode_info >> (4 + (i * 4))) & 0xF;
-        let max = if shift == 0 { 0xFFFF >> ((opcode_info & 0xF) * 4) } else { 0xF };
+        let shift = (args_shift >> (i << 2)) & 0xF;
+        let max = if shift == 0 { 0xFFFF >> (opcode_args << 2) } else { 0xF };
 
         if *val > max {
-            return Err(format!("0x{:X} ({}) is bigger than the max of 0x{:X} ({}) on line {} at character {}", val, val, max, max, line, ch));
+            return Err(format!("0x{:X} ({}) is bigger than the max of 0x{:X} ({}) on line {}", val, val, max, max, line));
         }
 
         opcode_shell |= val << shift;
@@ -199,11 +207,10 @@ fn load(path: Option<String>) -> String {
 }
 
 fn main() {
-    // Implement variable handling as part of parser as a variable in the parser function
     // remember that the max size is 4096 bytes!!
     lazy_static! { static ref FILE: String = load(env::args().nth(1)); }
 
-    let tokenlist = tokenize(&FILE);
+    let tokenlist = lex(&FILE);
 
     /*
     for token in tokenlist.iter() {
@@ -211,8 +218,9 @@ fn main() {
     }
      */
     let instructions = parse(&tokenlist);
+
     for instruction in instructions.iter() {
-        println!("{:X?}",evaluate(instruction));
-        //evaluate(instruction);
+        //println!("{:X?}",evaluate(instruction));
+        evaluate(instruction);
     }
 }

@@ -29,7 +29,7 @@ pub enum Keyword {
     Colon, Define, Unk,
 }
 
-#[derive(Copy, Clone)]
+
 pub enum Category {
     Func(Keyword),
     Def(Keyword),
@@ -44,15 +44,14 @@ impl Token {
     }
 
     fn tokenize(raw: &str) -> Category {
-        match raw.chars().nth(0).unwrap() {
+        match raw.chars().next().unwrap() {
             '0'..='9' => Num,
             
             'v' => Reg(V),
             'i' => Reg(I),
             ':' => Def(Colon),
             
-            'a'..='z' |
-            'A'..='Z' => match raw {
+            _ => match raw {
                 "clear"    => Func(Clear),
                 "return"   => Func(Return),
                 "jump"     => Func(Jump),
@@ -83,21 +82,13 @@ impl Token {
 
                 _ => Ident,
             }
-
-            _ => Ident,
         }
     }
 }
 
 impl Instruction {
-    pub fn new(token: &Token, function: Keyword) -> Self {
-        Self {
-            function,
-            registers: vec![],
-            arguments: vec![],
-            line: token.line,
-            ch: token.ch,
-        }
+    pub fn new(function: Keyword, line: usize, ch: usize) -> Self {
+        Self { function, registers: vec![], arguments: vec![], line, ch, }
     }
 }
 
