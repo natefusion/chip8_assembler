@@ -17,12 +17,17 @@ fn lex(tokenstream: &'static str) -> Vec<Token> {
                 _ => string.len(),
             };
 
-            string[..delim]
-                .split_ascii_whitespace()
-                .enumerate()
-                .map(|(ch, raw)| Token::new(raw, line+1, ch))
-                .collect::<Vec<Token>>()
-                
+            let mut tokens = vec![];
+            let mut beg = 0;
+            let code = &string[..delim];
+
+            while beg < code.len() {
+                let end = if let Some(x) = code[beg..].find(|x:char| x.is_whitespace()) { x + beg } else { code.len() };
+                tokens.push(Token::new(&code[beg..end], line+1, beg+1));
+                beg = if let Some(x) = code[end..].find(|x:char| !x.is_whitespace()) { x + end } else { break };
+            }
+
+            tokens
         }).collect()
 }
 
@@ -36,37 +41,26 @@ fn parse(tokenlist: &[Token]) -> Vec<Instruction> {
     }
     
     fn parse_token(token: &Token, env: &mut Env) {
-        let mut push_number = |token: &Token| {
-            let (x, radix) = if let Some("0x") = token.raw.get(0..2) {
-                (2, 16)
-            } else if let Some("v") = token.raw.get(0..1) {
-                (1, 16)
-            } else {
-                (0, 10)
-            };
-            
-            match usize::from_str_radix(&token.raw[x..], radix) {
-                Ok(num) => { env.instructions.last_mut().unwrap().arguments.push(num); },
-                Err(_)  => { eprintln!("Identifiers cannot start with numbers");       },
-            }
-        };
-        
         match token.category {
             Func(function) => { env.instructions.push(Instruction::new(function, token.line, token.ch)); },
 
             // Def(Colon) and Def(Define) do almost exactly the same thing. Should I try to combine them? (Doing so would require a peekable iterator)
             Def(Colon) => if let Some(x) = env.iter.next() {
                 match x.category {
-                    Ident => { env.labels.insert(&x, env.instructions.len() * 2 + 0x200); },
-                    _     => { eprintln!("Malformed label on line {}", x.line);           },
+                    Ident => if let Some(_) = env.labels.insert(&x, env.instructions.len() * 2 + 0x200) {
+                        eprintln!("Warning: label '{}' was redefined at ({}, {})", x.raw, x.line, x.ch);
+                    },
+                    _     => { eprintln!("Malformed label. '{}' is not a valid identifier. ({}, {})", x.raw, x.line, x.ch);           },
                 }
             },
 
             Def(Define) => if let (Some(x), Some(y)) = (env.iter.next(), env.iter.next()) {
                 match (&x.category, &y.category) {
                     (Ident, Reg(_)) |
-                    (Ident, Num) => { env.definitions.insert(&x, &y); },
-                    _ => { eprintln!("Malformed definition on line {}", x.line); },
+                    (Ident, Num(_)) => if let Some(_) = env.definitions.insert(&x, &y) {
+                        eprintln!("Warning: definition '{}' was redefined at ({}, {})", x.raw, x.line, x.ch);
+                    },
+                    _ => { eprintln!("Malformed definition. '{}' is not a valid identifier. ({}, {})", x.raw, x.line, x.ch); },
                 }
             },
 
@@ -75,19 +69,23 @@ fn parse(tokenlist: &[Token]) -> Vec<Instruction> {
                 let definition = env.definitions.get(&token);
 
                 match (label, definition) {
-                    (Some(_), Some(_)) => { eprintln!("Identifier {} was defined two times", token.raw);   },
+                    (Some(_), Some(_)) => { eprintln!("Identifier '{}' was defined as a label and as a definition", token.raw);   },
                     (Some(x), None   ) => { env.instructions.last_mut().unwrap().arguments.push(*x);       },
                     (None,    Some(x)) => { parse_token(x, env);                                           },
-                    (None,    None   ) => { eprintln!("Error, unknown identifier on line {}", token.line); },
+                    (None,    None   ) => { eprintln!("Unknown identifier ({}) at ({}, {})", token.raw, token.line, token.ch); },
                 }
             }
 
             Reg(x) => {
-                if let V = x { push_number(token); }
+                if let V = x {
+                    let num = usize::from_str_radix(&token.raw[1..], 16).unwrap();
+                    env.instructions.last_mut().unwrap().arguments.push(num);
+                }
+
                 env.instructions.last_mut().unwrap().registers.push(x);
             },
             
-            Num => { push_number(token); },
+            Num(num) => { env.instructions.last_mut().unwrap().arguments.push(num); },
 
             _ => {},
         }
@@ -112,6 +110,7 @@ fn evaluate(instruction: &Instruction) -> Result<usize, String> {
     let mut register = instruction.registers.iter();
     let arguments = instruction.arguments.iter().enumerate();
     let line = instruction.line;
+    let ch = instruction.ch;
     
     // Makes next match statement look pretty
     let (arg0, arg1) = match (register.next(), register.next()) {
@@ -123,8 +122,8 @@ fn evaluate(instruction: &Instruction) -> Result<usize, String> {
 
     /*                  v- number of arguments
      * opcode_info: 0x482
-     *                 ^- first argument is shifted 8 bits to the left,
-     *                ^-- second argument is shifted 4 bits to the left
+     *                 ^- first argument is shifted 8 bits to the right,
+     *                ^-- second argument is shifted 4 bits to the right
      *
      * The arguments are shifted so that they can be bitwise-ored into opcode_shell with ease
      * This solution also keeps the match statement from getting ugly
@@ -174,14 +173,14 @@ fn evaluate(instruction: &Instruction) -> Result<usize, String> {
         (Jump,   Unk, Unk) => (0x1000, 0x1),
         (Jump0,  Unk, Unk) => (0xB000, 0x1),
 
-         _ => return Err(format!("Malformed instruction found on line {}", line)),
+         _ => return Err(format!("Malformed instruction found at ({}, {})", line, ch)),
     };
 
     let opcode_args = opcode_info & 0xF;
     let args_shift = opcode_info >> 4;
     
     if arguments.len() != opcode_args {
-        return Err(format!("Expected {} arguments, found {} on line {}", opcode_args, arguments.len(), line));
+        return Err(format!("Expected {} arguments, found {} at ({}, {})", opcode_args, arguments.len(), line, ch));
     }
 
     for (i, val) in arguments {
@@ -189,7 +188,7 @@ fn evaluate(instruction: &Instruction) -> Result<usize, String> {
         let max = if shift == 0 { 0xFFFF >> (opcode_args << 2) } else { 0xF };
 
         if *val > max {
-            return Err(format!("0x{:X} ({}) is bigger than the max of 0x{:X} ({}) on line {}", val, val, max, max, line));
+            return Err(format!("0x{:X} ({}) is bigger than the max of 0x{:X} ({}) for opcode 0x{:X} at ({}, {})", val, val, max, max, opcode_shell, line, ch));
         }
 
         opcode_shell |= val << shift;
@@ -217,11 +216,12 @@ fn main() {
         println!("{}",token.raw);
 
     }
-     */
+    */
+
     let instructions = parse(&tokenlist);
 
     for instruction in instructions.iter() {
-        //println!("{:X?}",evaluate(instruction));
-        evaluate(instruction);
+        println!("{:X?}",evaluate(instruction));
+        //evaluate(instruction);
     }
 }

@@ -34,7 +34,7 @@ pub enum Category {
     Func(Keyword),
     Def(Keyword),
     Reg(Keyword),
-    Num,
+    Num(usize),
     Ident,
 }
 
@@ -44,10 +44,31 @@ impl Token {
     }
 
     fn tokenize(raw: &str) -> Category {
-        match raw.chars().next().unwrap() {
-            '0'..='9' => Num,
+        let mut character = raw.chars();
+        match character.next().unwrap() {
+            '0'..='9' => {
+                let (x, radix) = if let Some("0x") = raw.get(0..2) {
+                    (2, 16)
+                } else {
+                    (0, 10)
+                };
             
-            'v' => Reg(V),
+                match usize::from_str_radix(&raw[x..], radix) {
+                    Ok(num) => Num(num),
+                    Err(_)  => Ident,
+                }
+            },
+            
+            'v' => {
+                match raw.len() {
+                    2 if matches!(character.next().unwrap(), '0'..='9' | 'a'..='f' | 'A'..='F') => {
+                        Reg(V)
+                    },
+
+                    _ => Ident,
+                }
+            },
+
             'i' => Reg(I),
             ':' => Def(Colon),
             
