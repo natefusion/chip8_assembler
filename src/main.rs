@@ -215,6 +215,7 @@ fn main() {
     /*
     for token in tokenlist.iter() {
         println!("{}",token.raw);
+
     }
      */
     let instructions = parse(&tokenlist);
