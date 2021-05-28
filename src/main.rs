@@ -58,7 +58,7 @@ fn parse(tokenlist: &[Token]) -> Vec<Instruction> {
             Def(Colon) => if let Some(x) = env.iter.next() {
                 match x.category {
                     Ident => { env.labels.insert(&x, env.instructions.len() * 2 + 0x200); },
-                    _     => { eprintln!("Malformed label on line {}", x.line);          },
+                    _     => { eprintln!("Malformed label on line {}", x.line);           },
                 }
             },
 
