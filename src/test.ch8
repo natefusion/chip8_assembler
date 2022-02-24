@@ -1,0 +1,13 @@
+/*add v0 v1
+def a v0
+
+comment here
+sub v0*/
+(+ a b c (* b d e))
+
+/*
+loop {
+  sub a v1
+  draw a vf 0
+}
+*/
