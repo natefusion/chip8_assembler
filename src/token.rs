@@ -10,8 +10,9 @@ pub struct Token {
 
 pub struct Instruction {
     pub function: Keyword,
-    pub registers: Vec<Keyword>,
-    pub arguments: Vec<usize>,
+    pub arguments: Vec<Category>,
+    //pub registers: Vec<Keyword>,
+    //pub arguments: Vec<usize>,
 
     pub line: usize,
     pub ch: usize,
@@ -19,17 +20,17 @@ pub struct Instruction {
 
 #[derive(Copy, Clone)]
 pub enum Keyword {
-    V, I, Dt, St, Key,
+    V(usize), I, Dt, St, Key,
     
     Clear, Return, Jump, Jump0, Call, Neq,
     Eq, Set, Add, Or, And, Xor, Sub, Shr,
     Subr, Shl, Rand, Draw, Bcd, Write,
     Read,
     
-    Colon, Define, Unk,
+    Colon, Defvar, Defmacro, Include
 }
 
-
+#[derive(Copy,Clone)]
 pub enum Category {
     Func(Keyword),
     Def(Keyword),
@@ -43,35 +44,30 @@ impl Token {
         Token { category: Self::tokenize(raw), raw, line, ch }
     }
 
-    fn tokenize(raw: &str) -> Category {
-        let mut character = raw.chars();
-        match character.next().unwrap() {
+    fn number(raw: &'static str, x: usize, radix: u32) -> Category {
+        match usize::from_str_radix(&raw[x..], radix) {
+            Ok(num) => Num(num),
+            Err(_)  => Ident,
+        }
+    }
+
+    fn tokenize(raw: &'static str) -> Category {
+        match raw.chars().next().unwrap() {
             '0'..='9' => {
-                let (x, radix) = if let Some("0x") = raw.get(0..2) {
-                    (2, 16)
-                } else {
-                    (0, 10)
+                let (x, radix) = match raw.get(0..2) {
+                    Some("0x") => (2, 16),
+                    Some("0b") => (2, 2),
+                    _ => (0, 10),
                 };
-            
-                match usize::from_str_radix(&raw[x..], radix) {
-                    Ok(num) => Num(num),
-                    Err(_)  => Ident,
-                }
+
+                Self::number(raw, x, radix)
             },
             
-            'v' => {
-                match raw.len() {
-                    2 if matches!(character.next().unwrap(), '0'..='9' | 'a'..='f' | 'A'..='F') => {
-                        Reg(V)
-                    },
-
-                    _ => Ident,
-                }
+            'v' => match (raw.len(), Self::number(raw, 1, 16)) {
+                (2, Num(num)) => Reg(V(num)),
+                (_, _) => Ident,
             },
 
-            'i' => Reg(I),
-            ':' => Def(Colon),
-            
             _ => match raw {
                 "clear"    => Func(Clear),
                 "return"   => Func(Return),
@@ -94,12 +90,17 @@ impl Token {
                 "bcd"      => Func(Bcd),
                 "write"    => Func(Write),
                 "read"     => Func(Read),
+                "include" => Func(Include),
                 
-                "define" => Def(Define),
+                
+                "defvar" => Def(Defvar),
+                "defmacro" => Def(Defmacro),
 
                 "dt"  => Reg(Dt),
                 "st"  => Reg(St),
                 "key" => Reg(Key),
+                "i"   => Reg(I),
+                ":"   => Def(Colon),
 
                 _ => Ident,
             }
@@ -109,7 +110,7 @@ impl Token {
 
 impl Instruction {
     pub fn new(function: Keyword, line: usize, ch: usize) -> Self {
-        Self { function, registers: vec![], arguments: vec![], line, ch, }
+        Self { function, arguments: vec![], line, ch, }
     }
 }
 
@@ -126,3 +127,42 @@ impl PartialEq for Token {
 }
 
 impl Eq for Token {}
+
+impl std::fmt::Debug for Keyword {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(
+            match self {
+                Keyword::Colon => "Colon",
+                Keyword::Clear => "Clear",
+                Keyword::Return => "Return",
+                Keyword::Jump => "Jump",
+                Keyword::Jump0 => "Jump0",
+                Keyword::Call => "Call",
+                Keyword::Neq => "Neq",
+                Keyword::Eq => "Eq",
+                Keyword::Set => "Set",
+                Keyword::Add => "Add",
+                Keyword::Or => "Or",
+                Keyword::And => "And",
+                Keyword::Xor => "Xor",
+                Keyword::Sub => "Sub",
+                Keyword::Shr => "Shr",
+                Keyword::Subr => "Subr",
+                Keyword::Shl => "Shl",
+                Keyword::Rand => "Rand",
+                Keyword::Draw => "Draw",
+                Keyword::Bcd => "bcd",
+                Keyword::Write => "Write",
+                Keyword::Read => "Read",
+                Keyword::V(_) => "V",
+                Keyword::I => "I",
+                Keyword::Dt => "DT",
+                Keyword::St => "ST",
+                Keyword::Key => "Key",
+                Keyword::Include => "include",
+                Keyword::Defvar => "defvar",
+                Keyword::Defmacro => "defmacro",
+            }
+        )
+    }
+}

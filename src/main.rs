@@ -1,7 +1,7 @@
 #[allow(non_camel_case_types, non_snake_case)]
 mod token;
 
-use std::{fs, env, process, collections::HashMap, slice::Iter};
+use std::{fs, io::Write, fs::File, env, process, collections::HashMap, slice::Iter};
 use crate::token::{Token, Instruction, Category::*, Keyword::*};
 use lazy_static::lazy_static;
 
@@ -11,8 +11,9 @@ fn lex(tokenstream: &'static str) -> Vec<Token> {
         .lines()
         .enumerate()
         .flat_map(|(line, string)| {
+            let string = string.trim();
             // Comments go until the end of the line and are ignored.
-            let delim = match string.find(';') {
+            let delim = match string.find('#') {
                 Some(x) => x,
                 _ => string.len(),
             };
@@ -21,6 +22,7 @@ fn lex(tokenstream: &'static str) -> Vec<Token> {
             let mut beg = 0;
             let code = &string[..delim];
 
+            // gay
             while beg < code.len() {
                 let end = if let Some(x) = code[beg..].find(|x:char| x.is_whitespace()) { x + beg } else { code.len() };
                 tokens.push(Token::new(&code[beg..end], line+1, beg+1));
@@ -54,7 +56,7 @@ fn parse(tokenlist: &[Token]) -> Vec<Instruction> {
                 }
             },
 
-            Def(Define) => if let (Some(x), Some(y)) = (env.iter.next(), env.iter.next()) {
+            Def(Defvar) => if let (Some(x), Some(y)) = (env.iter.next(), env.iter.next()) {
                 match (&x.category, &y.category) {
                     (Ident, Reg(_)) |
                     (Ident, Num(_)) => if let Some(_) = env.definitions.insert(&x, &y) {
@@ -69,23 +71,14 @@ fn parse(tokenlist: &[Token]) -> Vec<Instruction> {
                 let definition = env.definitions.get(&token);
 
                 match (label, definition) {
-                    (Some(_), Some(_)) => { eprintln!("Identifier '{}' was defined as a label and as a definition", token.raw);   },
-                    (Some(x), None   ) => { env.instructions.last_mut().unwrap().arguments.push(*x);       },
-                    (None,    Some(x)) => { parse_token(x, env);                                           },
-                    (None,    None   ) => { eprintln!("Unknown identifier ({}) at ({}, {})", token.raw, token.line, token.ch); },
+                    (Some(_), Some(_)) => { eprintln!("Identifier '{}' was defined as a label and as a definition", token.raw); },
+                    (Some(x), None   ) => { env.instructions.last_mut().unwrap().arguments.push(Num(*x)); },
+                    (None,    Some(x)) => { parse_token(x, env); },
+                    (None,    None)    => { eprintln!("Unknown identifier '{}' ({}, {})", token.raw, token.line, token.ch); },
                 }
             }
 
-            Reg(x) => {
-                if let V = x {
-                    let num = usize::from_str_radix(&token.raw[1..], 16).unwrap();
-                    env.instructions.last_mut().unwrap().arguments.push(num);
-                }
-
-                env.instructions.last_mut().unwrap().registers.push(x);
-            },
-            
-            Num(num) => { env.instructions.last_mut().unwrap().arguments.push(num); },
+            Reg(_) | Num(_) => { env.instructions.last_mut().unwrap().arguments.push(token.category); },
 
             _ => {},
         }
@@ -105,20 +98,20 @@ fn parse(tokenlist: &[Token]) -> Vec<Instruction> {
     env.instructions
 }
 
-fn evaluate(instruction: &Instruction) -> Result<usize, String> {
-    let function = instruction.function;
-    let mut register = instruction.registers.iter();
-    let arguments = instruction.arguments.iter().enumerate();
+fn eval_ins(instruction: &Instruction) -> Result<usize, String> {
+    let func = &instruction.function;
+    let args = &instruction.arguments;
     let line = instruction.line;
     let ch = instruction.ch;
-    
-    // Makes next match statement look pretty
-    let (arg0, arg1) = match (register.next(), register.next()) {
-        (Some(x), Some(y)) => (*x,  *y),
-        (None,    Some(x)) => (Unk, *x),
-        (Some(x), None   ) => (*x,  Unk),
-        (None,    None   ) => (Unk, Unk),
-    };
+
+    let nums =
+        args
+        .iter()
+        .filter(|x| matches!(x, Num(_) | Reg(V(_))))
+        .map(|x| match x {
+            Num(val) | Reg(V(val)) => *val,
+            _ => 0, // this will never occur
+        }).collect::<Vec<usize>>();
 
     /*                  v- number of arguments
      * opcode_info: 0x482
@@ -128,100 +121,129 @@ fn evaluate(instruction: &Instruction) -> Result<usize, String> {
      * The arguments are shifted so that they can be bitwise-ored into opcode_shell with ease
      * This solution also keeps the match statement from getting ugly
      */
-    let (mut opcode_shell, opcode_info) = match (function, arg0, arg1) {
-        (Eq,     V,   V  ) => (0x9000, 0x482),
-        (Eq,     V,   Unk) => (0x4000, 0x82),
-        (Eq,     V,   Key) => (0xE0A1, 0x81),
-        (Eq,     Key, V  ) => (0xE0A1, 0x81),
 
-        (Neq,    V,   Key) => (0xE09E, 0x81),
-        (Neq,    Key, V  ) => (0xE09E, 0x81),
-        (Neq,    V,   V  ) => (0x5000, 0x482),
-        (Neq,    V,   Unk) => (0x3000, 0x82),
+    // ugleh
+    let (mut opcode_shell, opcode_info) = match (func, &args[..]) {
+        (Eq, [Reg(V(_)), Reg(V(_))]) => (0x9000, 0x482),
+        (Eq, [Reg(V(_)), Num(_)]) |
+        (Eq, [Num(_), Reg(V(_))]) => (0x4000, 0x82),
+        (Eq, [Reg(V(_)), Reg(Key)]) |
+        (Eq, [Reg(Key), Reg(V(_))]) => (0xE0A1, 0x81),
 
-        (Set,    V,   Unk) => (0x6000, 0x82),
-        (Set,    V,   V  ) => (0x8000, 0x482),
-        (Set,    I,   Unk) => (0xA000, 0x1),
-        (Set,    V,   Dt ) => (0xF007, 0x81),
-        (Set,    Dt,  V  ) => (0xF015, 0x81),
-        (Set,    V,   St ) => (0xF018, 0x81),
-        (Set,    I,   V  ) => (0xF029, 0x81),
-        (Set,    V,   Key) => (0xF00A, 0x81),
+        (Neq, [Reg(V(_)), Reg(Key)]) |
+        (Neq, [Reg(Key), Reg(V(_))]) => (0xE09E, 0x81),
+        (Neq, [Reg(V(_)), Reg(V(_))]) => (0x5000, 0x482),
+        (Neq, [Reg(V(_)), Num(_)]) => (0x3000, 0x82),
 
-        (Add,    V,   Unk) => (0x7000, 0x82),
-        (Add,    V,   V  ) => (0x8004, 0x482),
-        (Add,    I,   V  ) => (0xF01E, 0x81),
+        (Set, [Reg(V(_)), Num(_)]) => (0x6000, 0x82),
+        (Set, [Reg(V(_)), Reg(V(_))]) => (0x8000, 0x482),
+        (Set, [Reg(I), Num(_)]) => (0xA000, 0x1),
+        (Set, [Reg(V(_)), Reg(Dt )]) => (0xF007, 0x81),
+        (Set, [Reg(Dt), Reg(V(_))]) => (0xF015, 0x81),
+        (Set, [Reg(V(_)), Reg(St)]) => (0xF018, 0x81),
+        (Set, [Reg(I), Reg(V(_))]) => (0xF029, 0x81),
+        (Set, [Reg(V(_)), Reg(Key)]) => (0xF00A, 0x81),
 
-        (Or,     V,   V  ) => (0x8001, 0x482),
-        (And,    V,   V  ) => (0x8002, 0x482),
-        (Xor,    V,   V  ) => (0x8003, 0x482),
-        (Sub,    V,   V  ) => (0x8005, 0x482),
-        (Shr,    V,   V  ) => (0x8006, 0x482),
-        (Subr,   V,   V  ) => (0x8007, 0x482),
-        (Shl,    V,   V  ) => (0x800E, 0x482),
+        (Add, [Reg(V(_)), Num(_)]) => (0x7000, 0x82),
+        (Add, [Reg(V(_)), Reg(V(_))]) => (0x8004, 0x482),
+        (Add, [Reg(I), Reg(V(_))]) => (0xF01E, 0x81),
 
-        (Rand,   V,   Unk) => (0xC000, 0x82),
-        (Draw,   V,   V  ) => (0xD000, 0x483),
+        (Or, [Reg(V(_)), Reg(V(_))]) => (0x8001, 0x482),
+        (And, [Reg(V(_)), Reg(V(_))]) => (0x8002, 0x482),
+        (Xor, [Reg(V(_)), Reg(V(_))]) => (0x8003, 0x482),
+        (Sub, [Reg(V(_)), Reg(V(_))]) => (0x8005, 0x482),
+        (Shr, [Reg(V(_)), Reg(V(_))]) => (0x8006, 0x482),
+        (Subr, [Reg(V(_)), Reg(V(_))]) => (0x8007, 0x482),
+        (Shl, [Reg(V(_)), Reg(V(_))]) => (0x800E, 0x482),
 
-        (Bcd,    V,   Unk) => (0xF033, 0x81),
-        (Write,  V,   Unk) => (0xF055, 0x81),
-        (Read,   V,   Unk) => (0xF065, 0x81),
+        (Rand, [Reg(V(_)), Num(_)]) => (0xC000, 0x82),
+        (Draw, [Reg(V(_)), Reg(V(_)), Num(_)]) => (0xD000, 0x483),
 
-        (Clear,  Unk, Unk) => (0x00E0, 0x0),
-        (Return, Unk, Unk) => (0x00EE, 0x0),
-        (Call,   Unk, Unk) => (0x2000, 0x1),
-        (Jump,   Unk, Unk) => (0x1000, 0x1),
-        (Jump0,  Unk, Unk) => (0xB000, 0x1),
+        (Bcd,    [Reg(V(_))]) => (0xF033, 0x81),
+        (Write,  [Reg(V(_))]) => (0xF055, 0x81),
+        (Read,   [Reg(V(_))]) => (0xF065, 0x81),
 
-         _ => return Err(format!("Malformed instruction found at ({}, {})", line, ch)),
+        (Clear, []) => (0x00E0, 0x0),
+        (Return, []) => (0x00EE, 0x0),
+        (Call, [Reg(V(_))]) => (0x2000, 0x1),
+        (Jump, [Num(_)]) => (0x1000, 0x1),
+        (Jump0, [Num(_)]) => (0xB000, 0x1),
+
+        //speshul
+        (Include, _) => { return Ok(nums.iter().fold(0, |acc, x| (acc << 4) | x)); },
+        
+        _ => return Err(format!("Malformed instruction found at ({}, {})", line, ch)),
     };
 
     let opcode_args = opcode_info & 0xF;
     let args_shift = opcode_info >> 4;
-    
-    if arguments.len() != opcode_args {
-        return Err(format!("Expected {} arguments, found {} at ({}, {})", opcode_args, arguments.len(), line, ch));
+
+    if nums.len() != opcode_args {
+        return Err(format!("Expected {} arguments, found {} at ({}, {})", opcode_args, args.len(), line, ch));
     }
 
-    for (i, val) in arguments {
+    for (i, val) in nums.iter().enumerate() {
         let shift = (args_shift >> (i << 2)) & 0xF;
         let max = if shift == 0 { 0xFFFF >> (opcode_args << 2) } else { 0xF };
-
+        
         if *val > max {
             return Err(format!("0x{:X} ({}) is bigger than the max of 0x{:X} ({}) for opcode 0x{:X} at ({}, {})", val, val, max, max, opcode_shell, line, ch));
         }
-
+        
         opcode_shell |= val << shift;
     }
 
     Ok(opcode_shell)
 }
 
-fn load(path: Option<String>) -> String {
+fn eval(instructions: &[Instruction]) -> Result<Vec<u8>, Vec<String>> {
+    let mut opcodes = vec![];
+    let mut errs = vec![];
+    
+    for instruction in instructions.iter() {
+        match eval_ins(instruction) {
+            Ok(op) => {
+                let op1 = ((op & 0xFF00) >> 8) as u8;
+                let op2 = (op & 0xFF) as u8;
+                
+                opcodes.push(op1);
+                opcodes.push(op2);
+            },
+            Err(e) => { errs.push(e); },
+        }
+    }
+
+    if errs.len() == 0 {
+        Ok(opcodes)
+    } else {
+        Err(errs)
+    }
+}
+
+fn load(path: Option<String>) -> (String, String) {
     match path {
-        Some(x) => match fs::read_to_string(x) {
-            Ok(file) => file.trim().to_string(),
+        Some(x) => match fs::read_to_string(&x) {
+            Ok(file) => (file.trim().to_string(), x),
             Err(_) => { eprintln!("Cannot read file"); process::exit(1); }},
         None => { eprintln!("Please enter a file"); process::exit(1); }}
 }
 
 fn main() {
     // remember that the max size is 4096 bytes!!
-    lazy_static! { static ref FILE: String = load(env::args().nth(1)); }
+    lazy_static! { static ref FILE: (String, String) = load(env::args().nth(1)); }
+    let opcodes = eval(&parse(&lex(&FILE.0)));
 
-    let tokenlist = lex(&FILE);
+    match opcodes {
+        Ok(ops) => {
+            let mut buffer = File::create(FILE.1.clone() + &String::from(".bin")).unwrap();
 
-    /*
-    for token in tokenlist.iter() {
-        println!("{}",token.raw);
-
-    }
-    */
-
-    let instructions = parse(&tokenlist);
-
-    for instruction in instructions.iter() {
-        println!("{:X?}",evaluate(instruction));
-        //evaluate(instruction);
+            buffer.write_all(&ops).unwrap();
+        },
+        
+        Err(e) => {
+            for err in e.iter() {
+                println!("{err}");
+            }
+        },
     }
 }
