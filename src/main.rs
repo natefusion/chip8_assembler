@@ -1,4 +1,4 @@
-use std::{slice::Iter, collections::HashMap};
+use std::{slice::Iter, iter::Peekable, collections::HashMap};
 use Exp::*;
 
 #[derive(Clone)]
@@ -7,223 +7,146 @@ enum Exp {
     List(Vec<Exp>),
 }
 
+// woohoo shitty lisp here I come
 impl Exp {
-    fn append(&mut self, item: Exp) {
-        match self {
-            List(x) => { x.push(item); },
-            Atom(_) => {},
-        }
+    fn push(&mut self, item: Exp) {
+        if let List(x) = self { x.push(item); }
     }
     
     fn prepend(&mut self, item: Exp) {
+        if let List(x) = self { x.insert(0, item); }
+    }
+
+    fn is_empty(&self) -> bool {
         match self {
-            List(x) => { x.insert(0, item); },
-            Atom(_) => {},
+            Atom(x) => x.is_empty(),
+            List(x) => x.is_empty(),
         }
     }
 
+    fn first(&self) -> Exp {
+        match self {
+            List(x) => x[0].clone(),
+            Atom(_) => self.clone(),
+        }
+    }
+
+    fn rest(&self) -> Exp {
+        match self {
+            // who needs efficiency
+            List(x) => List(x[1..].to_vec()),
+            Atom(_) => self.clone(),
+        }
+    }
+    
     fn print(&self) {
         match self {
             Atom(x) => {
-                print!("{} ", x);
+                print!("\"{}\" ", x);
+                //print!("Atom({}) ", x);
             },
             
             List(x) => {
-                print!(" [ ");
+                print!("[ ");
+                //print!("List([");
                 
                 for a in x {
                     a.print();
                 }
                 
-                print!("]");
+                print!("]\n");
             }
         }
     }
 }
 
-struct Env<'a> {
-    iter: Iter<'a, String>,
+struct Env {
     labels: HashMap<String, usize>,
     defs: HashMap<String, String>,
+    pc: usize,
 }
 
 fn tokenize(code: &'static str) -> Vec<String> {
-    code.replace("(", " ( ")
-        .replace(")", " ) ")
-        .replace("}", " } ")
-        .replace("{", " { ")
-        .replace("/*", " /* ")
-        .replace("*/", " */ ")
-        .lines()
+    code.lines()
         .flat_map(|x| {
-            // splits line with whitespace as a deliminator into a vec of strings
-            // inserts a "" to the end of the vec to signify a new line has occurred
+            if let Some("#") = x.get(..1) {
+                return vec![];
+            }
+            
             let mut y = x.split_whitespace()
-                 .map(|x| x.to_string())
-                 .collect::<Vec<String>>();
+                .map(|x| x.to_string())
+                .collect::<Vec<String>>();
 
-            //y.push("".to_string());
+            match y.iter().next() {
+                Some(x) => if x != "(" && x != ")" {
+                    y.insert(0, "(".to_string());
+                    y.push(")".to_string());
+                },
+                None => {},
+            }
             y
         }).collect()
 }
 
-fn is_ins(token: &str) -> bool {
-    match token {
-        "def"      |
-        
-        "clear"    |
-        "return"   |
-        "jump"     |
-        "jump0"    |
-        "call"     |
-        "neq"      |
-        "eq"       |
-        "set"      |
-        "add"      |
-        "or"       |
-        "and"      |
-        "xor"      |
-        "sub"      |
-        "shr"      |
-        "subr"     |
-        "shl"      |
-        "rand"     |
-        "draw"     |
-        "bcd"      |
-        "write"    |
-        "read"     => true,
-        _ => false,
-    }
-}
-
-fn is_keyword(token: &str) -> bool {
-    is_ins(token) || match token {
-        "loop" |
-        "macro" |
-        "/*" |
-        "*/"
-            => true,
-        _ => false,
-    }
-}
-
-/*
-fn is_math(token: &str) -> bool {
-    match token {
-        "+" |
-        "*" |
-        "/" |
-        "-" => true,
-        _ => false,
-    }
-}
-*/
-
-fn parse(iter: &mut Iter<String>, end: Option<&str>) -> Exp {
+fn parse(iter: &mut Peekable<Iter<String>>) -> Exp {
     let mut ast = List(vec![]);
 
-    while let Some(token) = iter.next() {
-        match token as &str {
-            "loop" => {
-                if let Some(mut x) = eval_loop(iter) {
-                    x.prepend(Atom(token.to_string()));
-                    ast.append(x);
-                }
-            },
-
-            i if is_ins(&token) => {
-                if let Some(mut x) = eval_ins(iter) {
-                    x.prepend(Atom(i.to_string()));
-                    ast.append(x);
-                }
-            },
-
-            "(" => {
-                let mut math = List(vec![]);
-
-                while let Some(t) = iter.next() {
-                    if t as &str == ")" { break; }
-                    math.append(Atom(t.to_string()));
-                }
-
-                
-                ast.append(math);
-            },
-            
-            "/*" => { if !skip_comment(iter) { println!("comment end bad"); break; } },
-
-            // tells parse where to stop parsing.
-            // this is used for anything wrapped in braces
-            _ => match end {
-                Some(x) => if x == token { break; }
-                None => {
-                    return Atom(token.to_string());
-                },
-            },
-        }
+    while let Ok(x) = parse_math(iter) {
+        ast.push(x);
     }
 
-    //println!("{:?}", ast);
     ast
 }
 
-fn eval_loop(iter: &mut Iter<String>) -> Option<Exp> {
-    if let Some(token) = iter.next() {
-        if token as &str != "{" {
-            return None;
+fn parse_math(iter: &mut Peekable<Iter<String>>) -> Result<Exp, String> {
+    let token = iter.next();
+
+    if let Some(x) = token { 
+        if *x == "(" {
+            let mut l = List(vec![]);
+
+            while let Some(x) = iter.peek() {
+                if **x == ")" { break; }
+                match parse_math(iter) {
+                    Ok(x) => l.push(x),
+                    Err(x) => {},
+                }
+            }
+            iter.next();
+            Ok(l)
+        } else if *x == ")" {
+            Err("bad math".to_string())
+        } else {
+            Ok(Atom(x.to_string()))
         }
+    } else {
+        Err("bad math".to_string())
     }
-
-    Some(parse(iter, Some("}")))
 }
 
-/*
-fn eval_math(iter: &mut Iter<String>) -> Option<Exp> {
-    let mut ins = List(vec![]);
-    
-    while let Some(token) = iter.next() {
-        if token as &str == ")" {
-            break;
-        }
-
-        ins.append(Atom(token.clone()));
-    }
-
-    Some(ins)
-}
-*/
-
-fn eval_ins(iter: &mut Iter<String>) -> Option<Exp> {
-    let mut ins = List(vec![]);
-    
-    while let Some(token) = iter.next() {
-        if is_keyword(&token) { break; }
-
-        ins.append(Atom(token.clone()));
-    }
-
-    Some(ins)
-}
-
-fn skip_comment(iter: &mut Iter<String>) -> bool {
-    while let Some(token) = iter.next() {
-        if token as &str == "*/" {
-            //println!("comment end gud");
-            return true;
-        }
-    }
-
-    false
-}
-
+//fn eval(ast: Exp, env: Env) {
+//}
 
 fn main() {
     let code = include_str!("test.ch8");
 
     let tokens = tokenize(code);
     //println!("{:?}",tokens);
-    let mut iter = tokens.iter();
-    let ast = parse(&mut iter, None);
+    let mut iter = tokens.iter().peekable();
 
-    ast.print();
+    let ast = parse(&mut iter);
+    //ast.print();
+    //if let Ok(x) = ast {
+    //    x.print();
+    //}
+
+    /*
+    let mut env = Env {
+        ast,
+        labels: HashMap::new(),
+        defs: HashMap::new(),
+        pc: 0x200,
+    };
+     */
+
 }

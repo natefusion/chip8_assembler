@@ -1,13 +1,107 @@
-/*add v0 v1
-def a v0
+# TIME TO ACTUALLY DEFINE THE GRAMMER
+# instructions and macros must be on their own line
+# arguments for instructions or macros must be user defined variables,
+# number literals, built-in variables, or labels
 
-comment here
-sub v0*/
-(+ a b c (* b d e))
+# no need to write "call". compiler will figure it out
+# "break" will end a loop
 
-/*
-loop {
-  sub a v1
-  draw a vf 0
-}
-*/
+def LINE_COUNT ( + ( + 3 2 ) 5 )
+def FILL_COUNT 5
+
+def x       v0
+def y       v1
+def px      v2
+def py      v3
+def dx      v4
+def dy      v5
+def counter v6
+
+: main
+  set i point
+
+  ( loop
+    set counter LINE_COUNT
+
+    ( loop
+      somewhere h-line
+      somewhere v-line
+      add counter -1
+
+      neq counter 0
+    )
+
+    set counter FILL_COUNT
+
+    ( loop
+      somewhere fill
+      add counter -1
+
+      neq counter 0
+    )
+
+    set v0 key
+    clear
+  )
+
+: somewhere
+  rand x 0xFF
+  rand y 0xFF
+;
+
+: scan
+  ( loop
+    draw px py 1
+
+    eq vf 0
+      break
+      
+    add px dx
+    add py dy
+  )
+
+  draw px py 1
+;
+
+: v-line
+  set px x
+  set dx 0
+
+  set py y
+  set dy -1
+  scan
+
+  set py y
+  set dy 1
+  add py dy
+  scan
+;
+
+: h-line
+  set py y
+  set dy 0
+
+  set px x
+  set dx -1
+  scan
+
+  set px y
+  set dx 1
+  add px dx
+  scan
+;
+
+: fill
+  ( loop
+    h-line
+    add y 1
+    draw x y 1
+
+    eq vf 0
+      break
+  )
+
+  draw x y 1
+;
+
+: point 0x80
