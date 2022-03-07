@@ -256,14 +256,15 @@ fn parse_exp(iter: &mut Peekable<Iter<String>>) -> Result<Exp, String> {
 }
 
 fn eval_top_level(ast: &Exp, env: &mut Env) -> Vec<Exp> {
-    let mut a = vec![emit_op(JUMP, &[Number(env.main)], env)];
+    env.pc += 2; // a jump is always inserted as the first instruction, at least at the moment
+    let mut a = vec![];
     if let List(l) = ast {
         for exp in l {
             a.push(eval(&exp, env));
         }
     }
 
-    a[0] = emit_op(JUMP, &[Number(env.main)], env);
+    a.insert(0, emit_op(JUMP, &[Number(env.main)], env));
     a
 }
 
