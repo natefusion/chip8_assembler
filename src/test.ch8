@@ -1,10 +1,10 @@
-# TIME TO ACTUALLY DEFINE THE GRAMMER
-# instructions and macros must be on their own line
-# arguments for instructions or macros must be user defined variables,
-# number literals, built-in variables, or labels
+; TIME TO ACTUALLY DEFINE THE GRAMMER
+; instructions and macros must be on their own line
+; arguments for instructions or macros must be user defined variables,
+; number literals, built-in variables, or labels
 
-# no need to write "call". compiler will figure it out
-# "break" will end a loop
+; no need to write "call". compiler will figure it out
+; "break" will end a loop
 
 def LINE_COUNT ( + ( + 3 2 ) 5 )
 def FILL_COUNT 5
@@ -17,15 +17,17 @@ def dx      v4
 def dy      v5
 def counter v6
 
-: main
+( def main
   set i point
 
-  ( loop
+  ( loop 
     set counter LINE_COUNT
 
     ( loop
-      somewhere h-line
-      somewhere v-line
+      somewhere
+      h-line
+      somewhere
+      v-line
       add counter -1
 
       neq counter 0
@@ -34,7 +36,8 @@ def counter v6
     set counter FILL_COUNT
 
     ( loop
-      somewhere fill
+      somewhere
+      fill
       add counter -1
 
       neq counter 0
@@ -43,13 +46,14 @@ def counter v6
     set v0 key
     clear
   )
+)
 
-: somewhere
-  rand x 0xFF
-  rand y 0xFF
-;
+( def somewhere
+  rand x #xFF
+  rand y #xFF
+)
 
-: scan
+( def scan
   ( loop
     draw px py 1
 
@@ -61,9 +65,9 @@ def counter v6
   )
 
   draw px py 1
-;
+)
 
-: v-line
+( def v-line
   set px x
   set dx 0
 
@@ -75,9 +79,9 @@ def counter v6
   set dy 1
   add py dy
   scan
-;
+)
 
-: h-line
+( def h-line
   set py y
   set dy 0
 
@@ -89,9 +93,9 @@ def counter v6
   set dx 1
   add px dx
   scan
-;
+)
 
-: fill
+( def fill
   ( loop
     h-line
     add y 1
@@ -102,6 +106,7 @@ def counter v6
   )
 
   draw x y 1
-;
+)
 
-: point 0x80
+def point
+#x80
