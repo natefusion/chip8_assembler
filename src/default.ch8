@@ -5,7 +5,6 @@ def px v1
 def py v2
 def one vf
 
-
 def W #x5
 def S #x8
 def A #x7
@@ -46,5 +45,4 @@ draw px py 8
 
   set ve 3
   set dt ve
-)
-      
+)      

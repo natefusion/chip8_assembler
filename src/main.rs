@@ -394,7 +394,7 @@ fn compile(opcodes: &[Exp]) -> Vec<u8> {
         match op {
             Number(n) => { binary.push(*n as u8); }
             List(l) => { binary.append(&mut compile(&l)); }
-            _ => { op.print(); },
+            _ => {} ,
         }
     }
 
@@ -454,27 +454,51 @@ fn main() {
                 }).collect::<Vec<u16>>().iter().fold(0, |sum, a| sum + a))}));
 
             builtin.insert(DEF, Proc(|args: &[Exp], env: &mut Env| -> Exp {
+                let label = env.pc;
                 let args = eval_partial(&args, env);
                 if let Symbol(key) = args[0].clone() {
+                    println!("{}", args.len());
+                    let mut ret = Symbol(DEF);
+
+                    let in_main = matches!(eval(&args[0], env), Symbol(MAIN));
+
+                    if in_main {
+                        env.main = label;
+                    }
+                    
                     let val = match args.len() {
+                        0 => Symbol(Token::new("roh ruh")),
                         1 => {
-                            if matches!(eval(&args[0], env), Symbol(MAIN)) {
-                                env.main = env.pc;
-                            }
-                            
-                            Number(env.pc)
+                            Number(label)
                         },
                         
-                        2 => args[1].first(),
-                        _ => Symbol(Token::new("roh ruh")),
+                        _ => {
+                            // allows for this construction:
+                            // ( def label
+                            //   ins a b
+                            // )
+
+                            let x = args[1].clone();
+                            if let List(mut l) = x {
+                                if !in_main {
+                                    l.push(emit_op(RETURN, &[], env));
+                                }
+                                ret = List(l);
+                                Number(label)
+                            } else {
+                                x.first()
+                            }
+                        },
+
                     };
 
                     env.defs.insert(key, val.clone());
-                    Symbol(DEF)
+                    ret
                 } else {
                     Symbol(Token::new("ruh roh"))
                 }
             }));
+
 
             builtin.insert(LOOP, Proc(|args: &[Exp], env: &mut Env| -> Exp {
                 let label = env.pc ; // catch pc before it changes
@@ -483,111 +507,36 @@ fn main() {
                 List(eval_partial(&args, env))
             }));
 
-            builtin.insert(EQ, Proc(|args: &[Exp], env: &mut Env| -> Exp {
-                let args = eval_partial(&args, env);
-                emit_op(EQ, &args, env)
-            }));
+            macro_rules! defun {
+                ($name:expr) => {
+                    builtin.insert($name, Proc(|args: &[Exp], env: &mut Env| -> Exp {
+                        let args = eval_partial(&args, env);
+                        emit_op($name, &args, env)
+                    }));
+                }
+            }
 
-            builtin.insert(NEQ, Proc(|args: &[Exp], env: &mut Env| -> Exp {
-                let args = eval_partial(&args, env);
-                emit_op(NEQ, &args, env)
-            }));
-
-            builtin.insert(SET, Proc(|args: &[Exp], env: &mut Env| -> Exp {
-                let args = eval_partial(&args, env);
-                emit_op(SET, &args, env)
-            }));
-
-            builtin.insert(ADD, Proc(|args: &[Exp], env: &mut Env| -> Exp {
-                let args = eval_partial(&args, env);
-                emit_op(ADD, &args, env)
-            }));
-
-             builtin.insert(OR, Proc(|args: &[Exp], env: &mut Env| -> Exp {
-                let args = eval_partial(&args, env);
-                emit_op(OR, &args, env)
-             }));
-
-            builtin.insert(AND, Proc(|args: &[Exp], env: &mut Env| -> Exp {
-                let args = eval_partial(&args, env);
-                emit_op(AND, &args, env)
-            }));
-
-            builtin.insert(XOR, Proc(|args: &[Exp], env: &mut Env| -> Exp {
-                let args = eval_partial(&args, env);
-                emit_op(XOR, &args, env)
-            }));
-
-             builtin.insert(SUB, Proc(|args: &[Exp], env: &mut Env| -> Exp {
-                let args = eval_partial(&args, env);
-                emit_op(SUB, &args, env)
-             }));
-
-             builtin.insert(SHR, Proc(|args: &[Exp], env: &mut Env| -> Exp {
-                let args = eval_partial(&args, env);
-                emit_op(SHR, &args, env)
-             }));
-
-             builtin.insert(SUBR, Proc(|args: &[Exp], env: &mut Env| -> Exp {
-                let args = eval_partial(&args, env);
-                emit_op(SUBR, &args, env)
-             }));
-
-             builtin.insert(SHL, Proc(|args: &[Exp], env: &mut Env| -> Exp {
-                let args = eval_partial(&args, env);
-                emit_op(SHL, &args, env)
-             }));
-
-             builtin.insert(RAND, Proc(|args: &[Exp], env: &mut Env| -> Exp {
-                let args = eval_partial(&args, env);
-                emit_op(RAND, &args, env)
-             }));
-
-             builtin.insert(DRAW, Proc(|args: &[Exp], env: &mut Env| -> Exp {
-                let args = eval_partial(&args, env);
-                emit_op(DRAW, &args, env)
-             }));
-
-             builtin.insert(BCD, Proc(|args: &[Exp], env: &mut Env| -> Exp {
-                let args = eval_partial(&args, env);
-                emit_op(BCD, &args, env)
-             }));
-
-             builtin.insert(WRITE, Proc(|args: &[Exp], env: &mut Env| -> Exp {
-                let args = eval_partial(&args, env);
-                emit_op(WRITE, &args, env)
-             }));
-
-             builtin.insert(READ, Proc(|args: &[Exp], env: &mut Env| -> Exp {
-                let args = eval_partial(&args, env);
-                emit_op(READ, &args, env)
-             }));
-
-            builtin.insert(CLEAR, Proc(|args: &[Exp], env: &mut Env| -> Exp {
-                let args = eval_partial(&args, env);
-                emit_op(CLEAR, &args, env)
-            }));
-
-            builtin.insert(RETURN, Proc(|args: &[Exp], env: &mut Env| -> Exp {
-                let args = eval_partial(&args, env);
-                emit_op(RETURN, &args, env)
-             }));
-
-
-            builtin.insert(CALL, Proc(|args: &[Exp], env: &mut Env| -> Exp {
-                let args = eval_partial(&args, env);
-                emit_op(CALL, &args, env)
-            }));
-
-            builtin.insert(JUMP, Proc(|args: &[Exp], env: &mut Env| -> Exp {
-                let args = eval_partial(&args, env);
-                emit_op(JUMP, &args, env)
-            }));
-
-            builtin.insert(JUMP0, Proc(|args: &[Exp], env: &mut Env| -> Exp {
-                let args = eval_partial(&args, env);
-                emit_op(JUMP0, &args, env)
-             }));
+            defun!(EQ);
+            defun!(NEQ);
+            defun!(SET);
+            defun!(ADD);
+            defun!(OR);
+            defun!(AND);
+            defun!(XOR);
+            defun!(SUB);
+            defun!(SHR);
+            defun!(SUBR);
+            defun!(SHL);
+            defun!(RAND);
+            defun!(DRAW);
+            defun!(BCD);
+            defun!(WRITE);
+            defun!(READ);
+            defun!(CLEAR);
+            defun!(RETURN);
+            defun!(CALL);
+            defun!(JUMP);
+            defun!(JUMP0);
             
             builtin
         },
@@ -601,4 +550,6 @@ fn main() {
 
     let mut buffer = File::create(filename.clone() + &String::from(".bin")).unwrap();
     buffer.write_all(&opcodes).unwrap();
+
+    // idea: eval the 'main' function last
 }
