@@ -328,7 +328,7 @@ fn emit_op(proc: Token, args: &[Exp], env: &mut Env) -> Exp {
 
         (CLEAR, []) => (0x00E0, 0x0),
         (RETURN, []) => (0x00EE, 0x0),
-        (CALL, [Symbol(V(_))]) => (0x2000, 0x1),
+        (CALL, [Number(_)]) => (0x2000, 0x1),
         (JUMP, [Number(_)]) => (0x1000, 0x1),
         (JUMP0, [Number(_)]) => (0xB000, 0x1),
         
@@ -413,7 +413,7 @@ fn main() {
     let (code, filename) = load(env::args().nth(1));
 
     let tokens = tokenize(&code);
-    //println!("{:?}",tokens);
+    println!("{:?}",tokens);
     let mut iter = tokens.iter().peekable();
 
     let ast = parse(&mut iter);
