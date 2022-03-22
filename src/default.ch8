@@ -1,48 +1,46 @@
-def person
-#x70 #x70 #x20 #x70 #xA8 #x20 #x50 #x50
+lab person
+  include #x70 #x70 #x20 #x70 #xA8 #x20 #x50 #x50
 
 def px v1
 def py v2
-def one vf
 
 def W #x5
 def S #x8
 def A #x7
 def D #x9
 
-def main
-set one 1
-rand px #b0011111
-rand py #b0001111
-set i person
-draw px py 8
-
-( loop
-  draw px py 8
-
-  set v0 W
-  eq v0 key
-    add py #xFF
-
-  set v0 S
-  eq v0 key
-    add py one
-
-  set v0 A
-  eq v0 key
-    add px #xFF
-
-  set v0 D
-  eq v0 key
-    add px one
-
+lab main
+  rand px #b0011111
+  rand py #b0001111
+  set i person
   draw px py 8
 
   ( loop
-    set ve dt
-    neq ve 0
-  )
+    draw px py 8
 
-  set ve 3
-  set dt ve
-)      
+    set v0 W
+    eq v0 key
+      add py #xFF
+
+    set v0 S
+    eq v0 key
+      add py 1
+
+    set v0 A
+    eq v0 key
+      add px #xFF
+
+    set v0 D
+    eq v0 key
+      add px 1
+
+    draw px py 8
+
+    ( loop
+      set ve dt
+      neq ve 0
+    )
+
+    set ve 3
+    set dt ve
+  )

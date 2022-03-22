@@ -1,5 +1,8 @@
-(defparameter *filename*
-  "/home/nathan/Documents/programming/chip8_assembler/src/default.ch8")
+;;#!/usr/bin/sbcl --script
+;;(load "/home/nathan/quicklisp/setup.lisp")
+;;(ql:quickload :trivia)
+;;(proclaim '(optimize (speed 3) (safety 0) (debug 0)))
+;;(use-package :trivia)
 
 (defun parse (l)
   (eval (read-from-string (concatenate 'string "'(" l ")"))))
@@ -22,12 +25,10 @@
   (remove-if
    (lambda (x) (string= x "")) l))
 
-(defparameter *file*
-  (parse
-   (flatten
+(defun tokenize (x)
+  (flatten
     (mapcar #'make-sexp
-            (remove-blank (uiop:read-file-lines *filename*))))))
-
+            (remove-blank (uiop:read-file-lines x)))))
 
 (defun make-env ()
   (let ((ht (make-hash-table)))
@@ -52,6 +53,8 @@
     (setf (gethash 'CALL ht) #'emit-op)
     (setf (gethash 'JUMP ht) #'emit-op)
     (setf (gethash 'JUMP0 ht) #'emit-op)
+    ;; these math functions dont work because emit-op acts weird
+    ;; maybe make a function for each instruction that just runs emit-op
     (setf (gethash '+ ht) #'+)
     (setf (gethash '- ht) #'-)
     (setf (gethash '* ht) #'*)
@@ -75,14 +78,12 @@
           :finally (return (list (ash (logand shell #xFF00) -8)
                                  (logand shell #xFF))))))
 
-(ql:quickload :trivia)
-(use-package :trivia)
 (defun emit-op (proc args env)
   (progn
     (incf (first env) 2)
     (combine-op
-     (remove-if #'builtin-var?
-                    (chip8-eval-args-partial args env :eval-v t))
+     (remove-if #'builtin-var? (chip8-eval-args-partial args env :eval-v t))
+     
      (match (append (list proc) (mapcar #'chip8-type args))
        ('(EQ V V) '(#x9000 #x48))
        ((or '(EQ V N)
@@ -133,29 +134,31 @@
        ('(JUMP0 N) '(#xB000 #x0))
        (_ '(0 0))))))
 
+(defun ins? (exp)
+  (and (listp exp)
+       (match (first exp)
+         ('EQ 't) ('NEQ 't) ('SET 't) ('ADD 't)
+         ('OR 't) ('AND 't) ('XOR 't) ('SUB 't)
+         ('SHR 't) ('SUBR 't) ('SHL 't) ('RAND 't)
+         ('DRAW 't) ('BCD 't) ('WRITE 't) ('READ 't)
+         ('CLEAR 't) ('RETURN 't) ('CALL 't) ('JUMP 't)
+         ('JUMP0 't)
+         (_ 'nil))))
+
 (defun chip8-eval-args-partial (args env &key eval-v)
   (mapcar (lambda (x)
-            (if (and (v? x) eval-v) (chip8-eval-v? x) (chip8-eval x env)))
+            (if (and (v? x) eval-v)
+                (chip8-eval-v? x)
+                (chip8-eval x env)))
           args))
 
 (defun chip8-eval-v? (exp)
-  (cond ((eq exp 'V0) 0)
-        ((eq exp 'V1) 1)
-        ((eq exp 'V2) 2)
-        ((eq exp 'V3) 3)
-        ((eq exp 'V4) 4)
-        ((eq exp 'V5) 5)
-        ((eq exp 'V6) 6)
-        ((eq exp 'V7) 7)
-        ((eq exp 'V8) 8)
-        ((eq exp 'V9) 9)
-        ((eq exp 'VA) #xA)
-        ((eq exp 'VB) #xB)
-        ((eq exp 'VC) #xC)
-        ((eq exp 'VD) #xD)
-        ((eq exp 'VE) #xE)
-        ((eq exp 'VF) #xF)
-        (t nil)))
+  (match exp
+    ('V0 0) ('V1 1) ('V2 2) ('V3 3)
+    ('V4 4) ('V5 5) ('V6 6) ('V7 7)
+    ('V8 8) ('V9 9) ('VA #xA) ('VB #xB)
+    ('VC #xC) ('VD #xD) ('VE #xE) ('VF #xF)
+    (t nil)))
 
 (defun v? (exp)
   (not (null (chip8-eval-v? exp))))
@@ -174,9 +177,8 @@
 
 (defun def? (exp)
   (and (listp exp)
-       (eq (first exp) 'DEF)
-       (= (length exp) 3)))
-
+       (eq (first exp) 'DEF)))
+  
 (defun chip8-eval-def (exp env)
   (progn
     (setf (gethash (cadr exp) (cadr env)) (caddr exp))
@@ -184,13 +186,12 @@
        
 (defun label? (exp)
   (and (listp exp)
-       (eq (first exp) 'DEF)
-       (= (length exp) 2)))
+       (eq (first exp) 'LAB)))
 
 (defun chip8-eval-label (exp env)
   (progn
     (setf (gethash (cadr exp) (cadr env)) (car env))
-    nil))
+    (cadr exp)))
 
 (defun loop? (exp)
   (and (listp exp)
@@ -203,16 +204,22 @@
 
 (defun var? (exp)
   (and (not (application? exp))
-       (not (builtin-var? exp))))
+       (not (self-evaluating? exp))))
 
 (defun application? (exp)
-  (and (listp exp)
+  (and (not (null exp))
+       (listp exp)
        (not (def? exp))
        (not (label? exp))))
 
 (defun include? (exp)
   (and (listp exp)
-       (numberp (first exp))))
+       (eq (first exp) 'INCLUDE)))
+
+(defun chip8-eval-include (exp env)
+  (progn
+    (incf (car env) (length (remove-if-not #'numberp exp)))
+    (chip8-eval-args-partial (rest exp) env)))
 
 (defun chip8-eval-top (exps env)
   (let ((program (chip8-eval-file exps env)))
@@ -226,16 +233,45 @@
    (remove-if #'null
               (mapcar (lambda (x) (chip8-eval x env)) exps))))
 
+(defun chip8-err (exp)
+  (format t "You typed: ~a~%That was bad~%" exp))
+
 (defun chip8-eval (exp env)
   (cond ((self-evaluating? exp) exp)
         ((def? exp) (chip8-eval-def exp env))
         ((label? exp) (chip8-eval-label exp env))
         ((var? exp) (gethash exp (cadr env)))
         ((loop? exp) (chip8-eval-loop exp env))
-        ((include? exp) (progn (incf (car env) (length exp)) exp))
-        ((application? exp)
+        ((include? exp) (chip8-eval-include exp env))
+        ((ins? exp)
          (funcall (chip8-eval (first exp) env)
                   (first exp)
                   (chip8-eval-args-partial (rest exp) env) env))
-        (t "uh oh")))
+        ((application? exp)
+         (apply (chip8-eval (first exp) env)
+                (chip8-eval-args-partial (rest exp) env :eval-v t)))
+        (t (chip8-err exp))))
 
+(defun chip8-compile (file)
+  (chip8-eval-top
+   (parse (tokenize file))
+   (make-env)))
+
+(defun chip8-write (bytes filename)
+  (with-open-file (f filename
+                     :direction :output
+                     :if-exists :supersede
+                     :if-does-not-exist :create
+                     :element-type 'unsigned-byte)
+    (mapcar (lambda (x) (write-byte x f)) bytes)))
+
+;;(defun main ()
+;;  (cond
+;;    ((>= (length *posix-argv*) 2)
+;;     (format t "~a~%"
+;;     (chip8-eval-top
+;;       (parse (tokenize (cadr *posix-argv*)))
+;;       (make-env))))
+;;    (t nil)))
+
+;;(main)

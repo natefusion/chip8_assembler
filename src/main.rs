@@ -413,7 +413,7 @@ fn main() {
     let (code, filename) = load(env::args().nth(1));
 
     let tokens = tokenize(&code);
-    println!("{:?}",tokens);
+    //println!("{:?}",tokens);
     let mut iter = tokens.iter().peekable();
 
     let ast = parse(&mut iter);
@@ -457,7 +457,6 @@ fn main() {
                 let label = env.pc;
                 let args = eval_partial(&args, env);
                 if let Symbol(key) = args[0].clone() {
-                    println!("{}", args.len());
                     let mut ret = Symbol(DEF);
 
                     let in_main = matches!(eval(&args[0], env), Symbol(MAIN));
@@ -546,10 +545,10 @@ fn main() {
 
      //eval_top_level(&ast, &mut env).iter().for_each(|x| x.print());
     let opcodes = compile(&eval_top_level(&ast, &mut env));
-    //println!("{:?}", opcodes);
+    println!("{:?}", opcodes);
 
     let mut buffer = File::create(filename.clone() + &String::from(".bin")).unwrap();
-    buffer.write_all(&opcodes).unwrap();
+    //buffer.write_all(&opcodes).unwrap();
 
     // idea: eval the 'main' function last
 }
