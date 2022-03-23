@@ -4,6 +4,11 @@
 ;;(proclaim '(optimize (speed 3) (safety 0) (debug 0)))
 ;;(use-package :trivia)
 
+(defun chip8-setup ()
+  (progn (ql:quickload :trivia)
+         (use-package :trivia)))
+         
+
 (defun parse (l)
   (eval (read-from-string (concatenate 'string "'(" l ")"))))
 
@@ -59,6 +64,9 @@
     (setf (gethash '- ht) #'-)
     (setf (gethash '* ht) #'*)
     (setf (gethash '/ ht) #'/)
+
+    (setf (gethash 'BREAK ht) (lambda () 'BREAK))
+
     (list #x202 ht)))
 
 (defun chip8-type (exp)
@@ -191,17 +199,22 @@
 (defun chip8-eval-label (exp env)
   (progn
     (setf (gethash (cadr exp) (cadr env)) (car env))
-    (cadr exp)))
+    nil))
 
 (defun loop? (exp)
   (and (listp exp)
        (eq (first exp) 'LOOP)))
 
 (defun chip8-eval-loop (exp env)
-  (let ((label (list (first env))))
-    (list (chip8-eval-file (rest exp) env)
+  (let ((label (list (first env)))
+        (loop-body (chip8-eval-file (rest exp) env)))
+    (list (mapcar (lambda (x)
+                    (if (eq x 'BREAK)
+                        (emit-op 'JUMP (list (+ 4 (first env))) env)
+                        x))
+                  loop-body)
           (emit-op 'JUMP label env))))
-
+  
 (defun var? (exp)
   (and (not (application? exp))
        (not (self-evaluating? exp))))

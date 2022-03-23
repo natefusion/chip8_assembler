@@ -17,17 +17,17 @@ def dx      v4
 def dy      v5
 def counter v6
 
-( def main
+lab main
   set i point
 
   ( loop 
     set counter LINE_COUNT
 
     ( loop
-      somewhere
+      call somewhere
       h-line
-      somewhere
-      v-line
+      call somewhere
+      call v-line
       add counter -1
 
       neq counter 0
@@ -36,8 +36,8 @@ def counter v6
     set counter FILL_COUNT
 
     ( loop
-      somewhere
-      fill
+      call somewhere
+      call fill
       add counter -1
 
       neq counter 0
@@ -46,14 +46,13 @@ def counter v6
     set v0 key
     clear
   )
-)
 
-( def somewhere
+
+lab somewhere
   rand x #xFF
   rand y #xFF
-)
 
-( def scan
+lab scan
   ( loop
     draw px py 1
 
@@ -65,37 +64,37 @@ def counter v6
   )
 
   draw px py 1
-)
 
-( def v-line
+
+lab v-line
   set px x
   set dx 0
 
   set py y
   set dy -1
-  scan
+  call scan
 
   set py y
   set dy 1
   add py dy
-  scan
-)
+  call scan
 
-( def h-line
+
+lab h-line
   set py y
   set dy 0
 
   set px x
   set dx -1
-  scan
+  call scan
 
   set px y
   set dx 1
   add px dx
-  scan
-)
+  call scan
 
-( def fill
+
+lab fill
   ( loop
     h-line
     add y 1
@@ -106,7 +105,7 @@ def counter v6
   )
 
   draw x y 1
-)
 
-def point
-#x80
+
+lab point
+  #x80
