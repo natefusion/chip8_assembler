@@ -242,14 +242,28 @@
     ((atom exps) (list exps))
     (t (mapcan (lambda (x) (process-labels (chip8-eval x env) env)) exps))))
 
-(defun rotate-main (exps offset)
-  "Ensures that the code below 'lab main' is always at the beginning"
-    (append (nthcdr offset exps)
-            (reverse (nthcdr (- (length exps) offset)
-                             (reverse exps)))))
+(defun rotate-main (exps)
+  "Ensures that the code above 'lab main' is always at the end"
+  (let ((main-label (position '(lab main) exps :test #'equal)))
+    (if main-label
+        ;; defs should be kept at the beginning
+        ;; everything else should be put at the end
+        (let ((before-main
+                (reduce (lambda (a b)
+                          (if (def? a)
+                              (push a (first b))
+                              (push a (second b)))
+                          b)
+                        (reverse (nthcdr (- (length exps) main-label) (reverse exps)))
+                        :initial-value (list nil nil)
+                        :from-end t)))
+        (append
+         (car before-main)
+         (nthcdr main-label exps)
+         (cdr before-main))))))
 
 (defun chip8-eval-top (exps env)
-  (let ((program (process-labels (chip8-eval-file exps env) env)))
+  (let ((program (process-labels (chip8-eval-file (rotate-main exps) env) env)))
     (let ((main-label (gethash 'main (cadr env))))
       (if main-label
           (rotate-main program (- main-label #x200))
