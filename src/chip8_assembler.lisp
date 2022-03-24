@@ -22,6 +22,7 @@
         (concatenate 'string "(" trim ") ")
         (concatenate 'string trim " "))))
 
+;; comment dont actually work, pls fix
 (defun remove-blank (l)
   (remove-if
    (lambda (x) (or (string= (string-trim " " x) "")
