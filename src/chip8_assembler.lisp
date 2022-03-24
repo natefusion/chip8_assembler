@@ -263,11 +263,7 @@
          (cdr before-main))))))
 
 (defun chip8-eval-top (exps env)
-  (let ((program (process-labels (chip8-eval-file (rotate-main exps) env) env)))
-    (let ((main-label (gethash 'main (cadr env))))
-      (if main-label
-          (rotate-main program (- main-label #x200))
-          "please add a main label"))))
+  (process-labels (chip8-eval-file (rotate-main exps) env) env))
 
 (defun chip8-eval-file (exps env)
   (cond
