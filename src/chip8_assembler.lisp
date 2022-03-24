@@ -15,20 +15,18 @@
 (defun flatten (l)
   (apply #'concatenate 'string l))
 
-(defun flatten-list (structure)
-  (cond ((null structure) nil)
-        ((atom structure) (list structure))
-        (t (mapcan #'flatten-list structure))))
-
 (defun make-sexp (s)
   (let ((trim (string-trim " " s)))
-    (if (and (string/= (subseq trim 0 1) "(") (string/= (subseq trim 0 1) ")"))
+    (if (and (string/= (subseq trim 0 1) "(")
+             (string/= (subseq trim 0 1) ")"))
         (concatenate 'string "(" trim ") ")
         (concatenate 'string trim " "))))
 
 (defun remove-blank (l)
   (remove-if
-   (lambda (x) (string= x "")) l))
+   (lambda (x) (or (string= (string-trim " " x) "")
+                   (string= (subseq (string-trim " " x) 0 1) ";")))
+     l))
 
 (defun tokenize (x)
   (flatten
@@ -54,7 +52,7 @@
     (setf (gethash 'WRITE ht) #'emit-op)
     (setf (gethash 'READ ht) #'emit-op)
     (setf (gethash 'CLEAR ht) #'emit-op)
-    (setf (gethash 'RETURN ht) #'emit-op)
+    (setf (gethash 'RET ht) #'emit-op)
     (setf (gethash 'CALL ht) #'emit-op)
     (setf (gethash 'JUMP ht) #'emit-op)
     (setf (gethash 'JUMP0 ht) #'emit-op)
@@ -65,16 +63,15 @@
     (setf (gethash '* ht) #'*)
     (setf (gethash '/ ht) #'/)
 
-    (setf (gethash 'BREAK ht) (lambda () 'BREAK))
+    (setf (gethash 'BREAK ht) (lambda () '(BREAK)))
 
-    (list #x202 ht)))
+    (list #x200 ht)))
 
 (defun chip8-type (exp)
   (cond
     ((v? exp) 'V)
     ((builtin-var? exp) exp)
-    ((numberp exp) 'N)
-    (t nil)))
+    (t 'N)))
 
 (defun combine-op (args shell&info)
   (let ((shell (car shell&info))
@@ -89,59 +86,58 @@
 (defun emit-op (proc args env)
   (progn
     (incf (first env) 2)
-    (combine-op
-     (remove-if #'builtin-var? (chip8-eval-args-partial args env :eval-v t))
-     
-     (match (append (list proc) (mapcar #'chip8-type args))
-       ('(EQ V V) '(#x9000 #x48))
-       ((or '(EQ V N)
-            '(EQ N V))
-        '(#x4000 #x8))
-       ((or '(EQ V KEY)
-            '(EQ KEY V))
-        '(#xE0A1 #x8))
-       
-       ((or '(NEQ V KEY)
-            '(NEQ KEY V))
-        '(#xE09E Ex81))
-       ('(NEQ V V) '(#x5000 #x48))
-       ('(NEQ V N) '(#x3000 #x8))
-       
-       ('(SET V N) '(#x6000 #x8))
-       ('(SET V V) '(#x8000 #x48))
-       ('(SET I N) '(#xA000 #x0))
-       ('(SET V DT) '(#xF007 #x8))
-       ('(SET DT V) '(#xF015 #x8))
-       ('(SET V ST) '(#xF018 #x8))
-       ('(SET I V) '(#xF029 #x8))
-       ('(SET V KEY) '(#xF00A #x8))
-       
-       ('(ADD V N) '(#x7000 #x8))
-       ('(ADD V V) '(#x8004 #x48))
-       ('(ADD I V) '(#xF01E #x8))
-       
-       ('(OR V V) '(#x8001 #x48))
-       ('(AND V V) '(#x8002 #x48))
-       ('(XOR V V) '(#x8003 #x48))
-       ('(SUB V V) '(#x8005 #x48))
-       ('(SHR V V) '(#x8006 #x48))
-       ('(SUBR V V) '(#x8007 #x48))
-       ('(SHL V V) '(#x800E #x48))
-       
-       ('(RAND V N) '(#xC000 #x8))
-       ('(DRAW V V N) '(#xD000 #x48))
-       
-       ('(BCD V) '(#xF033 #x8))
-       ('(WRITE V) '(#xF055 #x8))
-       ('(READ V) '(#xF065 #x8))
-       
-       ('(CLEAR) '(#x00E0 #x0))
-       ('(RETURN) '(#x00EE #x0))
-       ('(CALL N) '(#x2000 #x0))
-       ('(JUMP N) '(#x1000 #x0))
-       ('(JUMP0 N) '(#xB000 #x0))
-       (_ '(0 0))))))
 
+    (let ((stripped-args
+            (remove-if #'builtin-var? (chip8-eval-args-partial args env :eval-v t))))
+      (if (not (null (remove-if #'numberp stripped-args)))
+          (list (cons proc args))
+          (combine-op
+           stripped-args
+     
+           (match (append (list proc) (mapcar #'chip8-type args))
+             ('(EQ V V) '(#x9000 #x48))
+             ('(EQ V N) '(#x4000 #x8))
+             ('(EQ V KEY) '(#xE0A1 #x8))
+             
+             ('(NEQ V KEY) '(#xE09E Ex81))
+             ('(NEQ V V) '(#x5000 #x48))
+             ('(NEQ V N) '(#x3000 #x8))
+             
+             ('(SET V N) '(#x6000 #x8))
+             ('(SET V V) '(#x8000 #x48))
+             ('(SET I N) '(#xA000 #x0))
+             ('(SET V DT) '(#xF007 #x8))
+             ('(SET DT V) '(#xF015 #x8))
+             ('(SET V ST) '(#xF018 #x8))
+             ('(SET I V) '(#xF029 #x8))
+             ('(SET V KEY) '(#xF00A #x8))
+             
+             ('(ADD V N) '(#x7000 #x8))
+             ('(ADD V V) '(#x8004 #x48))
+             ('(ADD I V) '(#xF01E #x8))
+             
+             ('(OR V V) '(#x8001 #x48))
+             ('(AND V V) '(#x8002 #x48))
+             ('(XOR V V) '(#x8003 #x48))
+             ('(SUB V V) '(#x8005 #x48))
+             ('(SHR V V) '(#x8006 #x48))
+             ('(SUBR V V) '(#x8007 #x48))
+             ('(SHL V V) '(#x800E #x48))
+             
+             ('(RAND V N) '(#xC000 #x8))
+             ('(DRAW V V N) '(#xD000 #x48))
+             
+             ('(BCD V) '(#xF033 #x8))
+             ('(WRITE V) '(#xF055 #x8))
+             ('(READ V) '(#xF065 #x8))
+             
+             ('(CLEAR) '(#x00E0 #x0))
+             ('(RET) '(#x00EE #x0))
+             ('(CALL N) '(#x2000 #x0))
+             ('(JUMP N) '(#x1000 #x0))
+             ('(JUMP0 N) '(#xB000 #x0))
+             (_ '(0 0))))))))
+    
 (defun ins? (exp)
   (and (listp exp)
        (match (first exp)
@@ -149,9 +145,9 @@
          ('OR 't) ('AND 't) ('XOR 't) ('SUB 't)
          ('SHR 't) ('SUBR 't) ('SHL 't) ('RAND 't)
          ('DRAW 't) ('BCD 't) ('WRITE 't) ('READ 't)
-         ('CLEAR 't) ('RETURN 't) ('CALL 't) ('JUMP 't)
+         ('CLEAR 't) ('RET 't) ('CALL 't) ('JUMP 't)
          ('JUMP0 't)
-         (_ 'nil))))
+         (_ nil))))
 
 (defun chip8-eval-args-partial (args env &key eval-v)
   (mapcar (lambda (x)
@@ -208,16 +204,21 @@
 (defun chip8-eval-loop (exp env)
   (let ((label (list (first env)))
         (loop-body (chip8-eval-file (rest exp) env)))
-    (list (mapcar (lambda (x)
-                    (if (eq x 'BREAK)
-                        (emit-op 'JUMP (list (+ 4 (first env))) env)
-                        x))
-                  loop-body)
-          (emit-op 'JUMP label env))))
+   (append
+     (loop :for x :in loop-body
+           :if (eq x 'BREAK)
+             :append (emit-op 'JUMP (list (+ 4 (car env))) env)
+           :else
+             :collect x)
+     (emit-op 'JUMP label env))))
   
 (defun var? (exp)
   (and (not (application? exp))
        (not (self-evaluating? exp))))
+
+(defun chip8-eval-var (exp env)
+  (let ((var (gethash exp (cadr env))))
+    (if var var exp)))
 
 (defun application? (exp)
   (and (not (null exp))
@@ -234,17 +235,31 @@
     (incf (car env) (length (remove-if-not #'numberp exp)))
     (chip8-eval-args-partial (rest exp) env)))
 
+(defun process-labels (exps env)
+  "Flattens list and processes unresolved labels"
+  (cond
+    ((null exps) nil)
+    ((atom exps) (list exps))
+    (t (mapcan (lambda (x) (process-labels (chip8-eval x env) env)) exps))))
+
+(defun rotate-main (exps offset)
+  "Ensures that the code below 'lab main' is always at the beginning"
+    (append (nthcdr offset exps)
+            (reverse (nthcdr (- (length exps) offset)
+                             (reverse exps)))))
+
 (defun chip8-eval-top (exps env)
-  (let ((program (chip8-eval-file exps env)))
+  (let ((program (process-labels (chip8-eval-file exps env) env)))
     (let ((main-label (gethash 'main (cadr env))))
       (if main-label
-          (append (emit-op 'JUMP (list main-label) env) program)
+          (rotate-main program (- main-label #x200))
           "please add a main label"))))
 
 (defun chip8-eval-file (exps env)
-  (flatten-list
-   (remove-if #'null
-              (mapcar (lambda (x) (chip8-eval x env)) exps))))
+  (cond
+    ((null exps) nil)
+    (t (append (chip8-eval (car exps) env)
+               (chip8-eval-file (rest exps) env)))))
 
 (defun chip8-err (exp)
   (format t "You typed: ~a~%That was bad~%" exp))
@@ -253,7 +268,7 @@
   (cond ((self-evaluating? exp) exp)
         ((def? exp) (chip8-eval-def exp env))
         ((label? exp) (chip8-eval-label exp env))
-        ((var? exp) (gethash exp (cadr env)))
+        ((var? exp) (chip8-eval-var exp env))
         ((loop? exp) (chip8-eval-loop exp env))
         ((include? exp) (chip8-eval-include exp env))
         ((ins? exp)

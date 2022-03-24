@@ -1,6 +1,3 @@
-lab person
-  include #x70 #x70 #x20 #x70 #xA8 #x20 #x50 #x50
-
 def px v1
 def py v2
 
@@ -44,3 +41,6 @@ lab main
     set ve 3
     set dt ve
   )
+
+lab person
+  include #x70 #x70 #x20 #x70 #xA8 #x20 #x50 #x50

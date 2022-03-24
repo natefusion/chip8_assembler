@@ -3,7 +3,6 @@
 ; arguments for instructions or macros must be user defined variables,
 ; number literals, built-in variables, or labels
 
-; no need to write "call". compiler will figure it out
 ; "break" will end a loop
 
 def LINE_COUNT ( + ( + 3 2 ) 5 )
@@ -16,6 +15,7 @@ def py      v3
 def dx      v4
 def dy      v5
 def counter v6
+def one v7
 
 lab main
   set i point
@@ -25,10 +25,10 @@ lab main
 
     ( loop
       call somewhere
-      h-line
+      call h-line
       call somewhere
       call v-line
-      add counter -1
+      sub counter one
 
       neq counter 0
     )
@@ -38,7 +38,7 @@ lab main
     ( loop
       call somewhere
       call fill
-      add counter -1
+      sub counter one
 
       neq counter 0
     )
@@ -51,12 +51,13 @@ lab main
 lab somewhere
   rand x #xFF
   rand y #xFF
+ret
 
 lab scan
   ( loop
     draw px py 1
 
-    eq vf 0
+    neq vf 0
       break
       
     add px dx
@@ -64,6 +65,7 @@ lab scan
   )
 
   draw px py 1
+ret
 
 
 lab v-line
@@ -71,41 +73,40 @@ lab v-line
   set dx 0
 
   set py y
-  set dy -1
+  set dy #xFF
   call scan
 
   set py y
   set dy 1
   add py dy
   call scan
-
+ret
 
 lab h-line
   set py y
   set dy 0
 
   set px x
-  set dx -1
+  set dx #xFF
   call scan
 
   set px y
   set dx 1
   add px dx
   call scan
-
+ret
 
 lab fill
   ( loop
-    h-line
+    call h-line
     add y 1
     draw x y 1
 
     eq vf 0
-      break
   )
 
   draw x y 1
-
+ret
 
 lab point
-  #x80
+  include #x80
