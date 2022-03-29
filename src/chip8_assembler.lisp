@@ -66,7 +66,7 @@
 
     (setf (gethash 'BREAK ht) (lambda () '(BREAK)))
 
-    (list #x200 ht)))
+    (list #x200 ht nil)))
 
 (defun chip8-type (exp)
   (cond
@@ -218,8 +218,11 @@
        (not (self-evaluating? exp))))
 
 (defun chip8-eval-var (exp env)
-  (let ((var (gethash exp (cadr env))))
-    (if var var exp)))
+  (let ((inner (gethash exp (cadr env)))
+        (outer (caddr env)))
+    (cond (inner inner)
+          (outer (chip8-eval-var exp outer))
+          (t nil))))
 
 (defun application? (exp)
   (and (not (null exp))
@@ -235,6 +238,24 @@
   (progn
     (incf (car env) (length (remove-if-not #'numberp exp)))
     (chip8-eval-args-partial (rest exp) env)))
+
+(defun macro? (exp)
+  (and (listp exp)
+       (eq (first exp) 'MACRO)))
+
+(defun chip8-eval-macro (exp env)
+  (let ((name (cadr exp))
+        (args (caddr exp))
+        (body (cdddr exp)))
+    (setf (gethash name (cadr env))
+          (let ((inner-env (make-env)))
+            (progn
+              (setf (caddr inner-env) env)
+              `(lambda (&rest vars)
+                 (loop :for arg :in args
+                       :for var :in vars :do
+                         (setf (gethash arg ,(cadr inner-env)) var))
+                 (chip8-eval-file ',body ,(cadr inner-env))))))))
 
 (defun process-labels (exps env)
   "Flattens list and processes unresolved labels"
@@ -282,6 +303,7 @@
         ((var? exp) (chip8-eval-var exp env))
         ((loop? exp) (chip8-eval-loop exp env))
         ((include? exp) (chip8-eval-include exp env))
+        ;;((macro? exp) (chip8-eval-macro exp env))
         ((ins? exp)
          (funcall (chip8-eval (first exp) env)
                   (first exp)
