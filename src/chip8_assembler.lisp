@@ -34,7 +34,7 @@
     (mapcar #'make-sexp
             (remove-blank (uiop:read-file-lines x)))))
 
-(defun make-env ()
+(defun make-env (&optional outer)
   (let ((ht (make-hash-table)))
     (setf (gethash 'EQ ht) #'emit-op)
     (setf (gethash 'NEQ ht) #'emit-op)
@@ -57,8 +57,6 @@
     (setf (gethash 'CALL ht) #'emit-op)
     (setf (gethash 'JUMP ht) #'emit-op)
     (setf (gethash 'JUMP0 ht) #'emit-op)
-    ;; these math functions dont work because emit-op acts weird
-    ;; maybe make a function for each instruction that just runs emit-op
     (setf (gethash '+ ht) #'+)
     (setf (gethash '- ht) #'-)
     (setf (gethash '* ht) #'*)
@@ -66,7 +64,7 @@
 
     (setf (gethash 'BREAK ht) (lambda () '(BREAK)))
 
-    (list #x200 ht nil)))
+    (list #x200 ht outer)))
 
 (defun chip8-type (exp)
   (cond
@@ -237,7 +235,11 @@
 (defun chip8-eval-include (exp env)
   (progn
     (incf (car env) (length (remove-if-not #'numberp exp)))
-    (chip8-eval-args-partial (rest exp) env)))
+    (chip8-eval-args-partial
+     (if (= (mod (length (rest exp)) 2) 0)
+         (rest exp)
+         (append (rest exp) '(0)))
+     env)))
 
 (defun macro? (exp)
   (and (listp exp)
@@ -247,15 +249,16 @@
   (let ((name (cadr exp))
         (args (caddr exp))
         (body (cdddr exp)))
-    (setf (gethash name (cadr env))
-          (let ((inner-env (make-env)))
-            (progn
-              (setf (caddr inner-env) env)
-              `(lambda (&rest vars)
-                 (loop :for arg :in args
-                       :for var :in vars :do
-                         (setf (gethash arg ,(cadr inner-env)) var))
-                 (chip8-eval-file ',body ,(cadr inner-env))))))))
+    (progn
+      (setf (gethash name (cadr env))
+            (eval `(lambda (&rest vars)
+                     (let ((inner-env (make-env ',(copy-list env))))
+                       (progn
+                         (loop for arg in ',args
+                               for var in vars do
+                                 (setf (gethash arg (cadr inner-env)) var))
+                         (chip8-eval-file ',body inner-env))))))
+      nil)))
 
 (defun process-labels (exps env)
   "Flattens list and processes unresolved labels"
@@ -272,17 +275,16 @@
         ;; everything else should be put at the end
         (let ((before-main
                 (reduce (lambda (a b)
-                          (if (def? a)
+                          (if (or (def? a) (macro? a))
                               (push a (first b))
                               (push a (second b)))
                           b)
                         (reverse (nthcdr (- (length exps) main-label) (reverse exps)))
                         :initial-value (list nil nil)
                         :from-end t)))
-        (append
-         (car before-main)
-         (nthcdr main-label exps)
-         (cdr before-main))))))
+        (append (car before-main)
+                (nthcdr main-label exps)
+                (cdr before-main))))))
 
 (defun chip8-eval-top (exps env)
   (process-labels (chip8-eval-file (rotate-main exps) env) env))
@@ -303,7 +305,7 @@
         ((var? exp) (chip8-eval-var exp env))
         ((loop? exp) (chip8-eval-loop exp env))
         ((include? exp) (chip8-eval-include exp env))
-        ;;((macro? exp) (chip8-eval-macro exp env))
+        ((macro? exp) (chip8-eval-macro exp env))
         ((ins? exp)
          (funcall (chip8-eval (first exp) env)
                   (first exp)
