@@ -305,7 +305,7 @@
         ((var? exp) (chip8-eval-var exp env))
         ((loop? exp) (chip8-eval-loop exp env))
         ((include? exp) (chip8-eval-include exp env))
-        ((macro? exp) (format t "uh oh"));(chip8-eval-macro exp env))
+        ((macro? exp) (chip8-eval-macro exp env))
         ((ins? exp)
          (funcall (chip8-eval (first exp) env)
                   (first exp)
