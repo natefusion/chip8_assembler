@@ -148,6 +148,11 @@
          ('JUMP0 't)
          (_ nil))))
 
+(defun chip8-eval-ins (exp env)
+  (funcall (chip8-eval (first exp) env)
+           (first exp)
+           (chip8-eval-args-partial (rest exp) env) env))
+
 (defun chip8-eval-args-partial (args env &key eval-v)
   (mapcar (lambda (x)
             (if (and (v? x) eval-v)
@@ -228,6 +233,10 @@
        (not (def? exp))
        (not (label? exp))))
 
+(defun chip8-eval-application (exp env)
+  (apply (chip8-eval (first exp) env)
+         (chip8-eval-args-partial (rest exp) env)))
+
 (defun include? (exp)
   (and (listp exp)
        (eq (first exp) 'INCLUDE)))
@@ -306,13 +315,8 @@
         ((loop? exp) (chip8-eval-loop exp env))
         ((include? exp) (chip8-eval-include exp env))
         ((macro? exp) (chip8-eval-macro exp env))
-        ((ins? exp)
-         (funcall (chip8-eval (first exp) env)
-                  (first exp)
-                  (chip8-eval-args-partial (rest exp) env) env))
-        ((application? exp)
-         (apply (chip8-eval (first exp) env)
-                (chip8-eval-args-partial (rest exp) env)))
+        ((ins? exp) (chip8-eval-ins exp env))
+        ((application? exp) (chip8-eval-application exp env))
         (t (chip8-err exp))))
 
 (defun chip8-compile (file)
