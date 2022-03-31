@@ -254,9 +254,9 @@
             (eval `(lambda (&rest vars)
                      (let ((inner-env (make-env ',(copy-list env))))
                        (progn
-                         (loop for arg in ',args
-                               for var in vars do
-                                 (setf (gethash arg (cadr inner-env)) var))
+                         (mapcar (lambda (arg var)
+                                   (setf (gethash arg (cadr inner-env)) var))
+                                 ',args vars)
                          (chip8-eval-file ',body inner-env))))))
       nil)))
 
@@ -312,7 +312,7 @@
                   (chip8-eval-args-partial (rest exp) env) env))
         ((application? exp)
          (apply (chip8-eval (first exp) env)
-                (chip8-eval-args-partial (rest exp) env :eval-v t)))
+                (chip8-eval-args-partial (rest exp) env)))
         (t (chip8-err exp))))
 
 (defun chip8-compile (file)
