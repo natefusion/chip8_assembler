@@ -5,9 +5,8 @@
 ;;(use-package :trivia)
 
 (defun chip8-setup ()
-  (progn (ql:quickload :trivia)
-         (use-package :trivia)))
-         
+  (ql:quickload :trivia)
+  (use-package :trivia))
 
 (defun parse (l)
   (eval (read-from-string (concatenate 'string "'(" l ")"))))
@@ -83,6 +82,7 @@
                                  (logand shell #xFF))))))
 
 (defun emit-op (proc args env)
+<<<<<<< HEAD
   (progn
     (incf (first env) 2)
 
@@ -136,6 +136,60 @@
              ('(JUMP N) '(#x1000 #x0))
              ('(JUMP0 N) '(#xB000 #x0))
              (_ '(0 0))))))))
+=======
+  (incf (first env) 2)
+  
+  (let ((stripped-args
+          (remove-if #'builtin-var? (chip8-eval-args-partial args env :eval-v t))))
+    (if (not (null (remove-if #'numberp stripped-args)))
+        (list (cons proc args))
+        (combine-op
+         stripped-args
+         
+         (match (append (list proc) (mapcar #'chip8-type args))
+           ('(EQ V V) '(#x9000 #x48))
+           ('(EQ V N) '(#x4000 #x8))
+           ('(EQ V KEY) '(#xE0A1 #x8))
+           
+           ('(NEQ V KEY) '(#xE09E Ex81))
+           ('(NEQ V V) '(#x5000 #x48))
+           ('(NEQ V N) '(#x3000 #x8))
+           
+           ('(SET V N) '(#x6000 #x8))
+           ('(SET V V) '(#x8000 #x48))
+           ('(SET I N) '(#xA000 #x0))
+           ('(SET V DT) '(#xF007 #x8))
+           ('(SET DT V) '(#xF015 #x8))
+           ('(SET V ST) '(#xF018 #x8))
+           ('(SET I V) '(#xF029 #x8))
+           ('(SET V KEY) '(#xF00A #x8))
+           
+           ('(ADD V N) '(#x7000 #x8))
+           ('(ADD V V) '(#x8004 #x48))
+           ('(ADD I V) '(#xF01E #x8))
+           
+           ('(OR V V) '(#x8001 #x48))
+           ('(AND V V) '(#x8002 #x48))
+           ('(XOR V V) '(#x8003 #x48))
+           ('(SUB V V) '(#x8005 #x48))
+           ('(SHR V V) '(#x8006 #x48))
+           ('(SUBR V V) '(#x8007 #x48))
+           ('(SHL V V) '(#x800E #x48))
+           
+           ('(RAND V N) '(#xC000 #x8))
+           ('(DRAW V V N) '(#xD000 #x48))
+           
+           ('(BCD V) '(#xF033 #x8))
+           ('(WRITE V) '(#xF055 #x8))
+           ('(READ V) '(#xF065 #x8))
+           
+           ('(CLEAR) '(#x00E0 #x0))
+           ('(RET) '(#x00EE #x0))
+           ('(CALL N) '(#x2000 #x0))
+           ('(JUMP N) '(#x1000 #x0))
+           ('(JUMP0 N) '(#xB000 #x0))
+           (_ '(0 0)))))))
+>>>>>>> 1b049c5 (remove progns because defuns are already implicit progns :))
     
 (defun ins? (exp)
   (and (listp exp)
@@ -188,18 +242,16 @@
        (eq (first exp) 'DEF)))
   
 (defun chip8-eval-def (exp env)
-  (progn
-    (setf (gethash (cadr exp) (cadr env)) (caddr exp))
-    nil))
-       
+  (setf (gethash (cadr exp) (cadr env)) (caddr exp))
+  nil)
+
 (defun label? (exp)
   (and (listp exp)
        (eq (first exp) 'LAB)))
 
 (defun chip8-eval-label (exp env)
-  (progn
-    (setf (gethash (cadr exp) (cadr env)) (car env))
-    nil))
+  (setf (gethash (cadr exp) (cadr env)) (car env))
+  nil)
 
 (defun loop? (exp)
   (and (listp exp)
@@ -242,13 +294,12 @@
        (eq (first exp) 'INCLUDE)))
 
 (defun chip8-eval-include (exp env)
-  (progn
-    (incf (car env) (length (remove-if-not #'numberp exp)))
-    (chip8-eval-args-partial
-     (if (= (mod (length (rest exp)) 2) 0)
-         (rest exp)
-         (append (rest exp) '(0)))
-     env)))
+  (incf (car env) (length (remove-if-not #'numberp exp)))
+  (chip8-eval-args-partial
+   (if (= (mod (length (rest exp)) 2) 0)
+       (rest exp)
+       (append (rest exp) '(0)))
+   env))
 
 (defun macro? (exp)
   (and (listp exp)
@@ -258,16 +309,14 @@
   (let ((name (cadr exp))
         (args (caddr exp))
         (body (cdddr exp)))
-    (progn
-      (setf (gethash name (cadr env))
-            (eval `(lambda (&rest vars)
-                     (let ((inner-env (make-env ',(copy-list env))))
-                       (progn
-                         (mapcar (lambda (arg var)
-                                   (setf (gethash arg (cadr inner-env)) var))
-                                 ',args vars)
-                         (chip8-eval-file ',body inner-env))))))
-      nil)))
+    (setf (gethash name (cadr env))
+          (eval `(lambda (&rest vars)
+                   (let ((inner-env (make-env ',(copy-list env))))
+                     (mapcar (lambda (arg var)
+                               (setf (gethash arg (cadr inner-env)) var))
+                             ',args vars)
+                     (chip8-eval-file ',body inner-env))))))
+      nil)
 
 (defun process-labels (exps env)
   "Flattens list and processes unresolved labels"
